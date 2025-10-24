@@ -104,10 +104,10 @@ def main():
 
         if frame_id % 2 == 0:
             # --- Analysis ---
-            head_pose = get_head_pose(frame)
-            gaze = get_gaze(frame)
+            num_faces, head_pose = get_head_pose(frame)
+            _, gaze = get_gaze(frame) # Gaze also returns num_faces, but we use head_pose's for consistency
             device = detect_device(frame)
-            attention_score, state = st.session_state.attention_scorer.calculate_attention_score(head_pose, gaze, device)
+            attention_score, state = st.session_state.attention_scorer.calculate_attention_score(head_pose, gaze, device, num_faces)
 
             # --- Logging ---
             log_entry = {
@@ -116,6 +116,7 @@ def main():
                 "head_pose": head_pose,
                 "gaze": gaze,
                 "device": device,
+                "num_faces": num_faces, # Add num_faces to log
                 "attention_score": round(attention_score, 2),
                 "state": state
             }
@@ -134,12 +135,17 @@ def main():
             attention_score = log_entry["attention_score"]
             state = log_entry["state"]
             device = log_entry["device"]
+            num_faces_logged = log_entry["num_faces"]
 
             # Draw bounding box for device
             if device["phone_detected"] and device["bbox"]:
                 x, y, w, h = device["bbox"]
                 cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
                 cv2.putText(frame, "Device Detected", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
+            
+            # Draw text for multiple faces
+            if num_faces_logged > 1:
+                cv2.putText(frame, f"Multiple Faces: {num_faces_logged}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
             score_placeholder.metric("Attention Score", f"{attention_score:.1f}")
 
@@ -147,6 +153,8 @@ def main():
                 status_placeholder.success(f"Status: {state.upper()}")
             elif state == "distracted" or state == "away":
                 status_placeholder.warning(f"Status: {state.upper()}")
+            elif state == "multiple_faces_detected":
+                status_placeholder.error(f"Status: MULTIPLE FACES DETECTED!")
             else: # device_detected
                 status_placeholder.error(f"Status: {state.upper()}")
 
