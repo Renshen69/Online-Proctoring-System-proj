@@ -1,6 +1,6 @@
 streamlit
 opencv-python
-mediapipe-silicon
+mediapipe
 numpy
 ultralytics
 scipy

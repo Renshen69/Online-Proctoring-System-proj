@@ -28,21 +28,25 @@ const Student: React.FC = () => {
     }
   }, [sessionId]);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (webcamRef.current) {
-        const imageSrc = webcamRef.current.getScreenshot();
-        if (imageSrc) {
-          axios.post('http://127.0.0.1:8000/api/submit-frame', { 
-            session_id: sessionId, 
-            frame: imageSrc 
-          });
-        }
-      }
-    }, 5000); // Send a frame every 5 seconds
+ useEffect(() => {
+  const interval = setInterval(() => {
+    if (webcamRef.current) {
+      const imageSrc = webcamRef.current.getScreenshot();
+      if (imageSrc) {
+        // Remove the "data:image/jpeg;base64," prefix
+        const base64Data = imageSrc.split(",")[1];
 
-    return () => clearInterval(interval);
-  }, [sessionId]);
+        axios.post('http://127.0.0.1:8000/api/submit-frame', { 
+          session_id: sessionId, 
+          frame: base64Data
+        });
+      }
+    }
+  }, 5000); // Send a frame every 5 seconds
+
+  return () => clearInterval(interval);
+}, [sessionId]);
+
 
   if (error) {
     return <div className="p-8 text-red-500">Error: {error}</div>;

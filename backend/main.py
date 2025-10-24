@@ -3,7 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import json
 import uuid
-
+import base64
+from app.head_pose import get_head_pose
+from app.analyze_frame import analyze_frame
+import numpy as np
+import cv2
 app = FastAPI()
 
 # --- CORS Middleware ---
@@ -78,26 +82,42 @@ async def start_session(data: dict):
 
 @app.post("/api/submit-frame")
 async def submit_frame(data: dict):
-    """Student submits a frame for analysis."""
-    session_id = data.get("session_id")
-    if session_id not in sessions:
-        return {"status": "error", "message": "Invalid session ID"}
+    try:
+        session_id = data.get("session_id")
+        frame_base64 = data.get("frame")
+        if session_id not in sessions:
+            return {"status": "error", "message": "Invalid session ID"}
+        # Convert base64 to numpy array
+        frame_bytes = base64.b64decode(frame_base64.split(",")[-1])  # remove prefix if exists
+        nparr = np.frombuffer(frame_bytes, np.uint8)
+        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if frame is None:
+            return {"status": "error", "message": "Failed to decode frame"}
+        # --- AI Analysis ---
+        result = analyze_frame(frame)
+        # Determine status
+        if result["num_faces"] == 0:
+            status = "No face detected"
+        elif result["num_faces"] > 1:
+            status = "Multiple faces detected"
+        elif result["state"] in ["distracted", "away"]:
+            status = "Distracted"
+        elif result["state"] == "focused":
+            status = "Focused"
+        else:  # device detected
+            status = "Device Detected"
 
-    # --- AI Proctoring Logic ---
-    # This is where you would integrate your Gemini face/gaze detection logic
-    # For this prototype, we'll simulate the analysis
-    import random
-    face_count = random.choice([1, 1, 1, 1, 0, 2]) # Simulate face count
-    status = "Focused"
-    if face_count == 0:
-        status = "No face detected"
-    elif face_count > 1:
-        status = "Multiple faces detected"
-    
-    sessions[session_id]["status"] = status
-    await send_status_update()
-    return {"status": "success", "proctoring_status": status}
+        sessions[session_id]["status"] = status
+        sessions[session_id]["student_id"] = data.get("student_id", sessions[session_id]["student_id"])
+        sessions[session_id]["last_analysis"] = result
 
+        await send_status_update()
+
+        return {"status": "success", "proctoring_status": status, "analysis": result}
+
+    except Exception as e:
+        print("Error in /submit-frame:", e)
+        return {"status": "error", "message": str(e)}
 @app.get("/api/admin-status")
 async def admin_status():
     """Provides the current status of all sessions to the admin."""

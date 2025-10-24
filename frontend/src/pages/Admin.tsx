@@ -14,23 +14,34 @@ const Admin: React.FC = () => {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const ws = new WebSocket('ws://127.0.0.1:8000/ws/admin');
+  // Fetch initial sessions
+  const fetchSessions = async () => {
+    try {
+      const response = await axios.get('http://127.0.0.1:8000/api/admin-status');
+      setSessions(response.data);
+    } catch (err) {
+      console.error('Failed to fetch sessions', err);
+    }
+  };
 
-    ws.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-      if (message.type === 'status_update') {
-        setSessions(message.data);
-      }
-    };
+  fetchSessions();
 
-    ws.onclose = () => {
-      console.log('WebSocket disconnected');
-    };
+  // WebSocket connection
+  const ws = new WebSocket('ws://127.0.0.1:8000/ws/admin');
 
-    return () => {
-      ws.close();
-    };
-  }, []);
+  ws.onmessage = (event) => {
+    const message = JSON.parse(event.data);
+    if (message.type === 'status_update') {
+      setSessions(message.data);
+    }
+  };
+
+  ws.onclose = () => console.log('WebSocket disconnected');
+
+  return () => ws.close();
+}, []);
+
+
 
   const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault();
