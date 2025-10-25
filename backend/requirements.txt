@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+python-multipart
+websockets
+opencv-python
+mediapipe
+numpy
+ultralytics
+python-dotenv
+streamlit
