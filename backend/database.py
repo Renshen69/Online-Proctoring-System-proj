@@ -118,6 +118,8 @@ class DatabaseManager:
                 multiple_faces_count INTEGER,
                 no_face_count INTEGER,
                 device_detected_count INTEGER,
+                mouse_out_count INTEGER DEFAULT 0,
+                tab_switch_count INTEGER DEFAULT 0,
                 total_events INTEGER,
                 session_duration REAL, -- in seconds
                 exam_score REAL, -- total exam score
@@ -125,6 +127,18 @@ class DatabaseManager:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (session_id) REFERENCES sessions (session_id),
                 UNIQUE(session_id, roll_no)
+            )
+        ''')
+        
+        # Violations table (for mouse out and tab switches)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS violations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                roll_no TEXT NOT NULL,
+                violation_type TEXT NOT NULL,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (session_id) REFERENCES sessions (session_id)
             )
         ''')
         
@@ -225,6 +239,52 @@ class DatabaseManager:
             print(f"Error updating student status: {e}")
             return False
     
+    def save_violation(self, session_id: str, roll_no: str, violation_type: str) -> bool:
+        """Save a violation (mouse out or tab switch) to the database."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                INSERT INTO violations (session_id, roll_no, violation_type)
+                VALUES (?, ?, ?)
+            ''', (session_id, roll_no, violation_type))
+            
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error saving violation: {e}")
+            return False
+    
+    def get_violation_counts(self, session_id: str, roll_no: str) -> Dict:
+        """Get violation counts for a student."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT violation_type, COUNT(*) 
+                FROM violations 
+                WHERE session_id = ? AND roll_no = ?
+                GROUP BY violation_type
+            ''', (session_id, roll_no))
+            
+            results = cursor.fetchall()
+            counts = {'mouse_out_count': 0, 'tab_switch_count': 0}
+            
+            for row in results:
+                if row[0] == 'mouse_out':
+                    counts['mouse_out_count'] = row[1]
+                elif row[0] == 'tab_switch':
+                    counts['tab_switch_count'] = row[1]
+            
+            conn.close()
+            return counts
+        except Exception as e:
+            print(f"Error getting violation counts: {e}")
+            return {'mouse_out_count': 0, 'tab_switch_count': 0}
+    
     def save_session_results(self, session_id: str, roll_no: str, results: Dict) -> bool:
         """Save final session results to the database."""
         try:
@@ -257,8 +317,9 @@ class DatabaseManager:
                 INSERT OR REPLACE INTO results (
                     session_id, roll_no, average_attention_score, distracted_count,
                     multiple_faces_count, no_face_count, device_detected_count,
+                    mouse_out_count, tab_switch_count,
                     total_events, session_duration
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 session_id,
                 roll_no,
@@ -267,6 +328,8 @@ class DatabaseManager:
                 results.get('multiple_faces_count', 0),
                 results.get('no_face_count', 0),
                 results.get('device_detected_count', 0),
+                results.get('mouse_out_count', 0),
+                results.get('tab_switch_count', 0),
                 total_events,
                 duration
             ))
@@ -286,7 +349,7 @@ class DatabaseManager:
             
             # Get session info
             cursor.execute('''
-                SELECT google_form_link, created_at, status 
+                SELECT google_form_link, created_at, status, exam_type, exam_title, exam_description
                 FROM sessions WHERE session_id = ?
             ''', (session_id,))
             
@@ -299,6 +362,9 @@ class DatabaseManager:
                 'google_form_link': session_row[0],
                 'created_at': session_row[1],
                 'status': session_row[2],
+                'exam_type': session_row[3],
+                'exam_title': session_row[4],
+                'exam_description': session_row[5],
                 'students': {}
             }
             
@@ -320,7 +386,8 @@ class DatabaseManager:
                 # Get results if available
                 cursor.execute('''
                     SELECT average_attention_score, distracted_count, multiple_faces_count,
-                           no_face_count, device_detected_count, total_events, session_duration
+                           no_face_count, device_detected_count, mouse_out_count, tab_switch_count,
+                           total_events, session_duration
                     FROM results WHERE session_id = ? AND roll_no = ?
                 ''', (session_id, roll_no))
                 
@@ -332,8 +399,10 @@ class DatabaseManager:
                         'multiple_faces_count': results_row[2],
                         'no_face_count': results_row[3],
                         'device_detected_count': results_row[4],
-                        'total_events': results_row[5],
-                        'session_duration': results_row[6]
+                        'mouse_out_count': results_row[5],
+                        'tab_switch_count': results_row[6],
+                        'total_events': results_row[7],
+                        'session_duration': results_row[8]
                     }
             
             conn.close()
@@ -350,7 +419,7 @@ class DatabaseManager:
             
             # Get all sessions
             cursor.execute('''
-                SELECT session_id, google_form_link, created_at, status
+                SELECT session_id, google_form_link, created_at, status, exam_type, exam_title, exam_description
                 FROM sessions ORDER BY created_at DESC
             ''')
             
@@ -363,6 +432,9 @@ class DatabaseManager:
                     'google_form_link': row[1],
                     'created_at': row[2],
                     'status': row[3],
+                    'exam_type': row[4],
+                    'exam_title': row[5],
+                    'exam_description': row[6],
                     'students': {}
                 }
                 
@@ -384,7 +456,8 @@ class DatabaseManager:
                     # Get results if available
                     cursor.execute('''
                         SELECT average_attention_score, distracted_count, multiple_faces_count,
-                               no_face_count, device_detected_count, total_events, session_duration
+                               no_face_count, device_detected_count, mouse_out_count, tab_switch_count,
+                               total_events, session_duration
                         FROM results WHERE session_id = ? AND roll_no = ?
                     ''', (session_id, roll_no))
                     
@@ -396,8 +469,10 @@ class DatabaseManager:
                             'multiple_faces_count': results_row[2],
                             'no_face_count': results_row[3],
                             'device_detected_count': results_row[4],
-                            'total_events': results_row[5],
-                            'session_duration': results_row[6]
+                            'mouse_out_count': results_row[5],
+                            'tab_switch_count': results_row[6],
+                            'total_events': results_row[7],
+                            'session_duration': results_row[8]
                         }
             
             conn.close()
@@ -615,7 +690,10 @@ class DatabaseManager:
             # 4. Delete results
             cursor.execute('DELETE FROM results WHERE session_id = ?', (session_id,))
             
-            # 5. Delete events
+            # 5. Delete violations
+            cursor.execute('DELETE FROM violations WHERE session_id = ?', (session_id,))
+            
+            # 6. Delete events
             cursor.execute('DELETE FROM events WHERE session_id = ?', (session_id,))
             
             # 6. Delete students

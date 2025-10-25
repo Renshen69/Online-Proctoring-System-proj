@@ -57,7 +57,7 @@ const OTPVerification: React.FC<OTPVerificationProps> = ({ email, onVerification
 
   const handleResendOTP = async () => {
     if (resendCooldown > 0) return;
-    
+
     setIsLoading(true);
     setError('');
     setSuccess('');
@@ -83,22 +83,22 @@ const OTPVerification: React.FC<OTPVerificationProps> = ({ email, onVerification
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       {/* Background Pattern */}
-      <div className="absolute inset-0 bg-gradient-to-br from-primary-50 via-white to-secondary-50"></div>
+      <div className="absolute inset-0 bg-gradient-to-br from-primary-50 via-white to-indigo-50"></div>
       <div className="absolute inset-0 opacity-40" style={{
         backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%230ea5e9' fill-opacity='0.05'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
       }}></div>
-      
+
       <div className="relative z-10 w-full max-w-md">
         {/* Main Card */}
-        <div className="card animate-fade-in">
+        <div className="card-gradient animate-fade-in shadow-soft">
           {/* Header */}
           <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-gradient-to-br from-warning-500 to-warning-700 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-glow">
+            <div className="w-16 h-16 bg-gradient-to-br from-warning-500 to-warning-700 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-glow animate-pulse-glow">
               <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
             </div>
-            <h1 className="text-3xl font-bold text-gradient mb-2">Verify Your Email</h1>
+            <h1 className="text-3xl font-bold text-gradient mb-2 font-heading">Verify Your Email</h1>
             <p className="text-secondary-600">We've sent a 6-digit code to</p>
             <p className="text-primary-600 font-semibold">{email}</p>
           </div>

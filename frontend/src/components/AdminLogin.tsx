@@ -43,22 +43,22 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, onShowSignup }) => {
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       {/* Background Pattern */}
-      <div className="absolute inset-0 bg-gradient-to-br from-primary-50 via-white to-secondary-50"></div>
+      <div className="absolute inset-0 bg-gradient-to-br from-primary-50 via-white to-indigo-50"></div>
       <div className="absolute inset-0 opacity-40" style={{
         backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%230ea5e9' fill-opacity='0.05'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
       }}></div>
       
       <div className="relative z-10 w-full max-w-md">
         {/* Main Card */}
-        <div className="card animate-fade-in">
+        <div className="card-gradient animate-fade-in shadow-soft">
           {/* Header */}
           <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-gradient-to-br from-primary-500 to-primary-700 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-glow">
+            <div className="w-16 h-16 bg-gradient-to-br from-primary-500 to-primary-700 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-glow animate-pulse-glow">
               <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
             </div>
-            <h1 className="text-3xl font-bold text-gradient mb-2">Admin Login</h1>
+            <h1 className="text-3xl font-bold text-gradient mb-2 font-heading">Admin Login</h1>
             <p className="text-secondary-600">Access the proctoring dashboard</p>
           </div>
 

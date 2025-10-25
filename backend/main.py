@@ -220,6 +220,49 @@ async def submit_frame(data: dict):
         print("Error in /submit-frame:", e)
         return {"status": "error", "message": str(e)}
 
+@app.post("/api/submit-violation")
+async def submit_violation(data: dict):
+    """Receive and store violations (mouse out, tab switch) from frontend."""
+    try:
+        session_id = data.get("session_id")
+        roll_no = data.get("roll_no")
+        violation_type = data.get("violation_type")
+        
+        if not session_id or not roll_no or not violation_type:
+            return {"status": "error", "message": "Session ID, roll number, and violation type are required"}
+        
+        # Save violation to database
+        db.save_violation(session_id, roll_no, violation_type)
+        
+        # Get current counts from database (source of truth)
+        violation_counts = db.get_violation_counts(session_id, roll_no)
+        
+        # Notify admin via websocket
+        await send_status_update()
+        
+        return {
+            "status": "success", 
+            "message": "Violation recorded",
+            "counts": violation_counts
+        }
+    
+    except Exception as e:
+        print(f"Error in /submit-violation: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.get("/api/violation-counts/{session_id}/{roll_no}")
+async def get_violation_counts(session_id: str, roll_no: str):
+    """Get current violation counts for a student."""
+    try:
+        counts = db.get_violation_counts(session_id, roll_no)
+        return {
+            "status": "success",
+            "counts": counts
+        }
+    except Exception as e:
+        print(f"Error getting violation counts: {e}")
+        return {"status": "error", "message": str(e)}
+
 @app.post("/api/stop-session")
 async def stop_session(data: dict):
     try:
@@ -243,6 +286,8 @@ async def stop_session(data: dict):
                 "multiple_faces_count": 0,
                 "no_face_count": 0,
                 "device_detected_count": 0,
+                "mouse_out_count": 0,
+                "tab_switch_count": 0,
             }
         else:
             attention_scores = [event.get("attention_score", 0) for event in events]
@@ -258,6 +303,10 @@ async def stop_session(data: dict):
                 "no_face_count": no_face_count,
                 "device_detected_count": device_detected_count,
             }
+        
+        # Get violation counts from database
+        violation_counts = db.get_violation_counts(session_id, roll_no)
+        results.update(violation_counts)
 
         # Update student status to Finished in database
         db.update_student_status(session_id, roll_no, "Finished")

@@ -66,22 +66,22 @@ const AdminSignup: React.FC<AdminSignupProps> = ({ onBack, onSignupSuccess }) =>
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       {/* Background Pattern */}
-      <div className="absolute inset-0 bg-gradient-to-br from-primary-50 via-white to-secondary-50"></div>
+      <div className="absolute inset-0 bg-gradient-to-br from-primary-50 via-white to-indigo-50"></div>
       <div className="absolute inset-0 opacity-40" style={{
         backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%230ea5e9' fill-opacity='0.05'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
       }}></div>
-      
+
       <div className="relative z-10 w-full max-w-md">
         {/* Main Card */}
-        <div className="card animate-fade-in">
+        <div className="card-gradient animate-fade-in shadow-soft">
           {/* Header */}
           <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-gradient-to-br from-success-500 to-success-700 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-glow">
+            <div className="w-16 h-16 bg-gradient-to-br from-success-500 to-success-700 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-glow-success animate-pulse-glow">
               <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
               </svg>
             </div>
-            <h1 className="text-3xl font-bold text-gradient mb-2">Create Admin Account</h1>
+            <h1 className="text-3xl font-bold text-gradient mb-2 font-heading">Create Admin Account</h1>
             <p className="text-secondary-600">Set up your proctoring dashboard access</p>
           </div>
 

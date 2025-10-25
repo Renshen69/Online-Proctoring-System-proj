@@ -148,14 +148,14 @@ export default function AdminDashboard() {
 
     return (
       <div
-        className="p-6 bg-gradient-to-r from-white to-secondary-50 border border-secondary-200 rounded-xl hover:shadow-medium transition-all duration-200 animate-slide-up group"
+        className="p-6 bg-gradient-to-br from-white/90 to-white/70 backdrop-blur-sm border border-white/20 rounded-2xl hover:shadow-medium transition-all duration-300 animate-slide-up group hover:scale-[1.01]"
         style={{ animationDelay: `${index * 0.1}s` }}
       >
         {/* Session Header */}
         <div className="flex items-center justify-between mb-4 pb-4 border-b border-secondary-200">
           <div className="flex-1">
             <div className="flex items-center space-x-3 mb-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center">
+              <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center group-hover:shadow-glow transition-all duration-300">
                 <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
@@ -270,6 +270,14 @@ export default function AdminDashboard() {
                     <p className="font-medium text-yellow-700 mb-1">Device Detected</p>
                     <p className="font-bold text-2xl text-yellow-800">{studentData.results.device_detected_count}</p>
                   </div>
+                  <div className="bg-gradient-to-br from-pink-50 to-pink-100 p-4 rounded-lg border border-pink-200">
+                    <p className="font-medium text-pink-700 mb-1">Mouse Out</p>
+                    <p className="font-bold text-2xl text-pink-800">{studentData.results.mouse_out_count || 0}</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 p-4 rounded-lg border border-indigo-200">
+                    <p className="font-medium text-indigo-700 mb-1">Tab Switches</p>
+                    <p className="font-bold text-2xl text-indigo-800">{studentData.results.tab_switch_count || 0}</p>
+                  </div>
                   <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200">
                     <p className="font-medium text-blue-700 mb-1">Total Events</p>
                     <p className="font-bold text-2xl text-blue-800">{studentData.results.total_events || 0}</p>
@@ -375,19 +383,19 @@ export default function AdminDashboard() {
 
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
       {/* Header */}
       <div className="bg-white/95 backdrop-blur-sm border-b border-secondary-200 sticky top-0 z-10 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-primary-700 rounded-2xl flex items-center justify-center shadow-lg">
+              <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-primary-700 rounded-2xl flex items-center justify-center shadow-lg animate-pulse-glow">
                 <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                 </svg>
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-gradient">Exam Proctoring Dashboard</h1>
+                <h1 className="text-3xl font-bold text-gradient font-heading">Exam Proctoring Dashboard</h1>
                 <p className="text-secondary-600 text-sm mt-1">Manage and monitor online examinations with AI-powered proctoring</p>
               </div>
             </div>
@@ -605,10 +613,10 @@ export default function AdminDashboard() {
 
         {/* Sessions Overview */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-2xl p-6 shadow-lg border border-blue-100 hover:shadow-xl transition-all duration-200">
+          <div className="card-gradient border border-blue-100 hover:shadow-xl transition-all duration-200 group">
             <div className="flex items-center justify-between">
               <div className="flex items-center">
-                <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center mr-4 shadow-lg">
+                <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center mr-4 shadow-lg group-hover:shadow-glow transition-all duration-300">
                   <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
@@ -622,10 +630,10 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl p-6 shadow-lg border border-green-100 hover:shadow-xl transition-all duration-200">
+          <div className="card-gradient border border-green-100 hover:shadow-xl transition-all duration-200 group">
             <div className="flex items-center justify-between">
               <div className="flex items-center">
-                <div className="w-14 h-14 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl flex items-center justify-center mr-4 shadow-lg">
+                <div className="w-14 h-14 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl flex items-center justify-center mr-4 shadow-lg group-hover:shadow-glow-success transition-all duration-300">
                   <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
@@ -639,7 +647,7 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 hover:shadow-xl transition-all duration-200">
+          <div className="card-gradient border border-gray-100 hover:shadow-xl transition-all duration-200 group">
             <div className="flex items-center justify-between">
               <div className="flex items-center">
                 <div className="w-14 h-14 bg-gradient-to-br from-gray-500 to-gray-600 rounded-2xl flex items-center justify-center mr-4 shadow-lg">

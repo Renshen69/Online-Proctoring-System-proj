@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import axios from "axios";
 import Webcam from "react-webcam";
 import CustomExam from "../components/CustomExam";
+import Notification from "../components/Notification";
 
 export default function StudentDashboard() {
   const { sessionId, rollNo } = useParams<{ sessionId: string; rollNo: string }>();
@@ -14,6 +15,14 @@ export default function StudentDashboard() {
   const [testResults, setTestResults] = useState<any>(null);
   const [isEndingTest, setIsEndingTest] = useState(false);
   const webcamRef = useRef<Webcam>(null);
+  const [mouseOutCount, setMouseOutCount] = useState(0);
+  const [tabSwitchCount, setTabSwitchCount] = useState(0);
+  const [notification, setNotification] = useState<{type: 'warning', title: string, message: string} | null>(null);
+  const mouseOutTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const tabSwitchTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastMouseOutRef = useRef<number>(0);
+  const lastTabSwitchRef = useRef<number>(0);
+  const isSubmittingViolationRef = useRef(false);
 
   // Fetch session data
   useEffect(() => {
@@ -68,6 +77,167 @@ export default function StudentDashboard() {
       ws.close();
     };
   }, []);
+
+  // Mouse pointer detection - track when mouse leaves window (debounced)
+  useEffect(() => {
+    if (isTestEnded) return;
+
+    const handleMouseLeave = () => {
+      const now = Date.now();
+      const timeSinceLastViolation = now - lastMouseOutRef.current;
+      
+      // Only count if at least 3 seconds have passed since last violation
+      if (timeSinceLastViolation < 3000) {
+        return;
+      }
+      
+      lastMouseOutRef.current = now;
+      
+      // Clear any existing timer
+      if (mouseOutTimerRef.current) {
+        clearTimeout(mouseOutTimerRef.current);
+      }
+      
+      // Set a debounce timer
+      mouseOutTimerRef.current = setTimeout(async () => {
+        // Prevent concurrent submissions
+        if (isSubmittingViolationRef.current) return;
+        isSubmittingViolationRef.current = true;
+        
+        // Show notification
+        setNotification({
+          type: 'warning',
+          title: 'Mouse Pointer Warning',
+          message: 'Your mouse pointer left the exam window. Please keep it within the window.'
+        });
+        
+        // Send violation to backend and get updated counts
+        if (sessionId && rollNo) {
+          try {
+            const response = await axios.post("http://127.0.0.1:8000/api/submit-violation", {
+              session_id: sessionId,
+              roll_no: rollNo,
+              violation_type: "mouse_out",
+              timestamp: new Date().toISOString()
+            });
+            
+            // Update counts from backend response (single source of truth)
+            if (response.data.status === 'success' && response.data.counts) {
+              setMouseOutCount(response.data.counts.mouse_out_count);
+              setTabSwitchCount(response.data.counts.tab_switch_count);
+            }
+          } catch (err) {
+            console.error('Error submitting mouse violation:', err);
+          } finally {
+            isSubmittingViolationRef.current = false;
+          }
+        }
+      }, 500); // 500ms debounce
+    };
+
+    document.addEventListener('mouseleave', handleMouseLeave);
+
+    return () => {
+      document.removeEventListener('mouseleave', handleMouseLeave);
+      if (mouseOutTimerRef.current) {
+        clearTimeout(mouseOutTimerRef.current);
+      }
+    };
+  }, [sessionId, rollNo, isTestEnded]);
+
+  // Tab switching detection (debounced)
+  useEffect(() => {
+    if (isTestEnded) return;
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        const now = Date.now();
+        const timeSinceLastViolation = now - lastTabSwitchRef.current;
+        
+        // Only count if at least 3 seconds have passed since last violation
+        if (timeSinceLastViolation < 3000) {
+          return;
+        }
+        
+        lastTabSwitchRef.current = now;
+        
+        // Clear any existing timer
+        if (tabSwitchTimerRef.current) {
+          clearTimeout(tabSwitchTimerRef.current);
+        }
+        
+        // Set a debounce timer
+        tabSwitchTimerRef.current = setTimeout(async () => {
+          // Prevent concurrent submissions
+          if (isSubmittingViolationRef.current) return;
+          isSubmittingViolationRef.current = true;
+          
+          // Show notification when they come back
+          setNotification({
+            type: 'warning',
+            title: 'Tab Switch Warning',
+            message: 'You switched tabs or windows. This has been recorded. Please stay on the exam page.'
+          });
+          
+          // Send violation to backend and get updated counts
+          if (sessionId && rollNo) {
+            try {
+              const response = await axios.post("http://127.0.0.1:8000/api/submit-violation", {
+                session_id: sessionId,
+                roll_no: rollNo,
+                violation_type: "tab_switch",
+                timestamp: new Date().toISOString()
+              });
+              
+              // Update counts from backend response (single source of truth)
+              if (response.data.status === 'success' && response.data.counts) {
+                setMouseOutCount(response.data.counts.mouse_out_count);
+                setTabSwitchCount(response.data.counts.tab_switch_count);
+              }
+            } catch (err) {
+              console.error('Error submitting tab violation:', err);
+            } finally {
+              isSubmittingViolationRef.current = false;
+            }
+          }
+        }, 500); // 500ms debounce
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (tabSwitchTimerRef.current) {
+        clearTimeout(tabSwitchTimerRef.current);
+      }
+    };
+  }, [sessionId, rollNo, isTestEnded]);
+
+  // Fetch violation counts on mount and periodically
+  useEffect(() => {
+    const fetchViolationCounts = async () => {
+      if (sessionId && rollNo && !isTestEnded) {
+        try {
+          const response = await axios.get(`http://127.0.0.1:8000/api/violation-counts/${sessionId}/${rollNo}`);
+          if (response.data.status === 'success' && response.data.counts) {
+            setMouseOutCount(response.data.counts.mouse_out_count);
+            setTabSwitchCount(response.data.counts.tab_switch_count);
+          }
+        } catch (err) {
+          console.error('Error fetching violation counts:', err);
+        }
+      }
+    };
+
+    // Initial fetch
+    fetchViolationCounts();
+
+    // Periodic sync every 5 seconds
+    const interval = setInterval(fetchViolationCounts, 5000);
+
+    return () => clearInterval(interval);
+  }, [sessionId, rollNo, isTestEnded]);
 
   // Frame submission interval
   useEffect(() => {
@@ -165,6 +335,17 @@ export default function StudentDashboard() {
 
   return (
     <div className="flex h-screen bg-secondary-50">
+      {/* Notification */}
+      {notification && (
+        <Notification
+          type={notification.type}
+          title={notification.title}
+          message={notification.message}
+          duration={4000}
+          onClose={() => setNotification(null)}
+        />
+      )}
+      
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
@@ -238,6 +419,28 @@ export default function StudentDashboard() {
                 </svg>
               </div>
               <p className="text-2xl font-mono font-bold text-primary-600">{formatTime(timeElapsed)}</p>
+            </div>
+
+            {/* Violation Counters */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 bg-warning-50 border border-warning-200 rounded-xl">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-medium text-warning-700">Mouse Out</span>
+                  <svg className="w-3 h-3 text-warning-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+                  </svg>
+                </div>
+                <p className="text-xl font-bold text-warning-800">{mouseOutCount}</p>
+              </div>
+              <div className="p-3 bg-danger-50 border border-danger-200 rounded-xl">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-medium text-danger-700">Tab Switches</span>
+                  <svg className="w-3 h-3 text-danger-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                  </svg>
+                </div>
+                <p className="text-xl font-bold text-danger-800">{tabSwitchCount}</p>
+              </div>
             </div>
           </div>
         </div>
@@ -361,6 +564,14 @@ export default function StudentDashboard() {
                     <div className="bg-secondary-100 p-2 rounded-lg text-center">
                       <p className="font-medium text-secondary-600">Device Detected</p>
                       <p className="font-bold text-danger-600">{testResults.device_detected_count}</p>
+                    </div>
+                    <div className="bg-secondary-100 p-2 rounded-lg text-center">
+                      <p className="font-medium text-secondary-600">Mouse Out</p>
+                      <p className="font-bold text-danger-600">{testResults.mouse_out_count || 0}</p>
+                    </div>
+                    <div className="bg-secondary-100 p-2 rounded-lg text-center">
+                      <p className="font-medium text-secondary-600">Tab Switches</p>
+                      <p className="font-bold text-danger-600">{testResults.tab_switch_count || 0}</p>
                     </div>
                   </div>
                 </div>
