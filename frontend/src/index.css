@@ -9,12 +9,12 @@
   * {
     @apply border-secondary-200;
   }
-  
+
   body {
     @apply bg-gradient-to-br from-slate-50 to-blue-50 text-secondary-900 font-sans antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
-  
+
   html {
     scroll-behavior: smooth;
   }
@@ -24,49 +24,65 @@
   .glass {
     @apply bg-white/80 backdrop-blur-sm border border-white/20;
   }
-  
+
   .glass-dark {
     @apply bg-secondary-900/80 backdrop-blur-sm border border-secondary-800/20;
   }
-  
+
   .btn-primary {
     @apply bg-primary-600 hover:bg-primary-700 text-white font-medium px-6 py-3 rounded-xl transition-all duration-200 shadow-soft hover:shadow-medium focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2;
   }
-  
+
   .btn-secondary {
     @apply bg-white hover:bg-secondary-50 text-secondary-700 font-medium px-6 py-3 rounded-xl transition-all duration-200 shadow-soft hover:shadow-medium border border-secondary-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2;
   }
-  
+
   .btn-danger {
     @apply bg-danger-600 hover:bg-danger-700 text-white font-medium px-6 py-3 rounded-xl transition-all duration-200 shadow-soft hover:shadow-medium focus:outline-none focus:ring-2 focus:ring-danger-500 focus:ring-offset-2;
   }
-  
+
   .card {
     @apply bg-white rounded-2xl shadow-soft border border-secondary-100 p-6;
   }
-  
+
   .input-field {
     @apply w-full px-4 py-3 rounded-xl border border-secondary-200 bg-white/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 placeholder-secondary-400;
   }
-  
+
   .status-badge {
     @apply inline-flex items-center px-3 py-1 rounded-full text-sm font-medium;
   }
-  
+
   .status-focused {
     @apply bg-success-100 text-success-800 border border-success-200;
   }
-  
+
   .status-distracted {
     @apply bg-warning-100 text-warning-800 border border-warning-200;
   }
-  
+
   .status-danger {
     @apply bg-danger-100 text-danger-800 border border-danger-200;
   }
-  
+
   .status-neutral {
     @apply bg-secondary-100 text-secondary-800 border border-secondary-200;
+  }
+
+  .status-success {
+    @apply bg-success-100 text-success-800 border border-success-200;
+  }
+
+  .shadow-glow {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+  }
+
+  .shadow-medium {
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  }
+
+  .shadow-soft {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   }
 }
 
@@ -74,13 +90,66 @@
   .text-gradient {
     @apply bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent;
   }
-  
+
   .animate-float {
     animation: float 6s ease-in-out infinite;
   }
-  
+
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-out;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.5s ease-out;
+  }
+
+  .animate-slide-down {
+    animation: slideDown 0.3s ease-out;
+  }
+
   @keyframes float {
-    0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-10px); }
+
+    0%,
+    100% {
+      transform: translateY(0px);
+    }
+
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 }

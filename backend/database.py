@@ -18,7 +18,10 @@ class DatabaseManager:
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS sessions (
                 session_id TEXT PRIMARY KEY,
-                google_form_link TEXT NOT NULL,
+                google_form_link TEXT,
+                exam_type TEXT DEFAULT 'google_form', -- 'google_form' or 'custom'
+                exam_title TEXT,
+                exam_description TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 status TEXT DEFAULT 'active'
             )
@@ -59,6 +62,51 @@ class DatabaseManager:
             )
         ''')
         
+        # Questions table (for custom exams)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS questions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                question_text TEXT NOT NULL,
+                question_type TEXT NOT NULL, -- 'mcq' or 'essay'
+                points INTEGER DEFAULT 1,
+                order_index INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (session_id) REFERENCES sessions (session_id)
+            )
+        ''')
+        
+        # MCQ Options table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS mcq_options (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                question_id INTEGER NOT NULL,
+                option_text TEXT NOT NULL,
+                is_correct BOOLEAN DEFAULT FALSE,
+                order_index INTEGER DEFAULT 0,
+                FOREIGN KEY (question_id) REFERENCES questions (id) ON DELETE CASCADE
+            )
+        ''')
+        
+        # Student Answers table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS student_answers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                roll_no TEXT NOT NULL,
+                question_id INTEGER NOT NULL,
+                answer_text TEXT, -- for essay questions
+                selected_option_id INTEGER, -- for MCQ questions
+                is_correct BOOLEAN,
+                points_earned REAL DEFAULT 0,
+                answered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (session_id) REFERENCES sessions (session_id),
+                FOREIGN KEY (question_id) REFERENCES questions (id),
+                FOREIGN KEY (selected_option_id) REFERENCES mcq_options (id),
+                UNIQUE(session_id, roll_no, question_id)
+            )
+        ''')
+        
         # Results table (final session results)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS results (
@@ -72,6 +120,8 @@ class DatabaseManager:
                 device_detected_count INTEGER,
                 total_events INTEGER,
                 session_duration REAL, -- in seconds
+                exam_score REAL, -- total exam score
+                total_possible_points REAL, -- total possible points
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (session_id) REFERENCES sessions (session_id),
                 UNIQUE(session_id, roll_no)
@@ -81,7 +131,8 @@ class DatabaseManager:
         conn.commit()
         conn.close()
     
-    def create_session(self, session_id: str, google_form_link: str, students: List[str]) -> bool:
+    def create_session(self, session_id: str, google_form_link: str = None, students: List[str] = None, 
+                      exam_type: str = 'google_form', exam_title: str = None, exam_description: str = None) -> bool:
         """Create a new session in the database."""
         try:
             conn = sqlite3.connect(self.db_path)
@@ -89,16 +140,17 @@ class DatabaseManager:
             
             # Insert session
             cursor.execute('''
-                INSERT INTO sessions (session_id, google_form_link)
-                VALUES (?, ?)
-            ''', (session_id, google_form_link))
+                INSERT INTO sessions (session_id, google_form_link, exam_type, exam_title, exam_description)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (session_id, google_form_link, exam_type, exam_title, exam_description))
             
-            # Insert students
-            for roll_no in students:
-                cursor.execute('''
-                    INSERT INTO students (session_id, roll_no)
-                    VALUES (?, ?)
-                ''', (session_id, roll_no))
+            # Insert students if provided
+            if students:
+                for roll_no in students:
+                    cursor.execute('''
+                        INSERT INTO students (session_id, roll_no)
+                        VALUES (?, ?)
+                    ''', (session_id, roll_no))
             
             conn.commit()
             conn.close()
@@ -379,6 +431,205 @@ class DatabaseManager:
         except Exception as e:
             print(f"Error getting session events: {e}")
             return []
+    
+    def add_question(self, session_id: str, question_text: str, question_type: str, 
+                    points: int = 1, order_index: int = 0) -> int:
+        """Add a question to a session. Returns question ID."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                INSERT INTO questions (session_id, question_text, question_type, points, order_index)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (session_id, question_text, question_type, points, order_index))
+            
+            question_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+            return question_id
+        except Exception as e:
+            print(f"Error adding question: {e}")
+            return None
+    
+    def add_mcq_option(self, question_id: int, option_text: str, is_correct: bool = False, 
+                      order_index: int = 0) -> bool:
+        """Add an option to an MCQ question."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                INSERT INTO mcq_options (question_id, option_text, is_correct, order_index)
+                VALUES (?, ?, ?, ?)
+            ''', (question_id, option_text, is_correct, order_index))
+            
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error adding MCQ option: {e}")
+            return False
+    
+    def get_session_questions(self, session_id: str) -> List[Dict]:
+        """Get all questions for a session with their options."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Get questions
+            cursor.execute('''
+                SELECT id, question_text, question_type, points, order_index
+                FROM questions WHERE session_id = ?
+                ORDER BY order_index ASC
+            ''', (session_id,))
+            
+            questions = []
+            for row in cursor.fetchall():
+                question = {
+                    'id': row[0],
+                    'question_text': row[1],
+                    'question_type': row[2],
+                    'points': row[3],
+                    'order_index': row[4],
+                    'options': []
+                }
+                
+                # Get MCQ options if it's an MCQ question
+                if row[2] == 'mcq':
+                    cursor.execute('''
+                        SELECT id, option_text, is_correct, order_index
+                        FROM mcq_options WHERE question_id = ?
+                        ORDER BY order_index ASC
+                    ''', (row[0],))
+                    
+                    for option_row in cursor.fetchall():
+                        question['options'].append({
+                            'id': option_row[0],
+                            'option_text': option_row[1],
+                            'is_correct': bool(option_row[2]),
+                            'order_index': option_row[3]
+                        })
+                
+                questions.append(question)
+            
+            conn.close()
+            return questions
+        except Exception as e:
+            print(f"Error getting session questions: {e}")
+            return []
+    
+    def save_student_answer(self, session_id: str, roll_no: str, question_id: int, 
+                          answer_text: str = None, selected_option_id: int = None) -> bool:
+        """Save a student's answer to a question."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Check if answer already exists
+            cursor.execute('''
+                SELECT id FROM student_answers 
+                WHERE session_id = ? AND roll_no = ? AND question_id = ?
+            ''', (session_id, roll_no, question_id))
+            
+            if cursor.fetchone():
+                # Update existing answer
+                cursor.execute('''
+                    UPDATE student_answers 
+                    SET answer_text = ?, selected_option_id = ?, answered_at = CURRENT_TIMESTAMP
+                    WHERE session_id = ? AND roll_no = ? AND question_id = ?
+                ''', (answer_text, selected_option_id, session_id, roll_no, question_id))
+            else:
+                # Insert new answer
+                cursor.execute('''
+                    INSERT INTO student_answers (session_id, roll_no, question_id, answer_text, selected_option_id)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (session_id, roll_no, question_id, answer_text, selected_option_id))
+            
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error saving student answer: {e}")
+            return False
+    
+    def get_student_answers(self, session_id: str, roll_no: str) -> List[Dict]:
+        """Get all answers for a student in a session."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT q.id, q.question_text, q.question_type, q.points,
+                       sa.answer_text, sa.selected_option_id, sa.points_earned, sa.answered_at,
+                       mo.option_text as selected_option_text
+                FROM questions q
+                LEFT JOIN student_answers sa ON q.id = sa.question_id AND sa.session_id = ? AND sa.roll_no = ?
+                LEFT JOIN mcq_options mo ON sa.selected_option_id = mo.id
+                WHERE q.session_id = ?
+                ORDER BY q.order_index ASC
+            ''', (session_id, roll_no, session_id))
+            
+            answers = []
+            for row in cursor.fetchall():
+                answer = {
+                    'question_id': row[0],
+                    'question_text': row[1],
+                    'question_type': row[2],
+                    'points': row[3],
+                    'answer_text': row[4],
+                    'selected_option_id': row[5],
+                    'points_earned': row[6] or 0,
+                    'answered_at': row[7],
+                    'selected_option_text': row[8]
+                }
+                answers.append(answer)
+            
+            conn.close()
+            return answers
+        except Exception as e:
+            print(f"Error getting student answers: {e}")
+            return []
+
+    def delete_session(self, session_id: str) -> bool:
+        """Delete a session and all its related data."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Delete in order to respect foreign key constraints
+            # 1. Delete student answers
+            cursor.execute('DELETE FROM student_answers WHERE session_id = ?', (session_id,))
+            
+            # 2. Delete MCQ options (cascade from questions)
+            cursor.execute('''
+                DELETE FROM mcq_options 
+                WHERE question_id IN (
+                    SELECT id FROM questions WHERE session_id = ?
+                )
+            ''', (session_id,))
+            
+            # 3. Delete questions
+            cursor.execute('DELETE FROM questions WHERE session_id = ?', (session_id,))
+            
+            # 4. Delete results
+            cursor.execute('DELETE FROM results WHERE session_id = ?', (session_id,))
+            
+            # 5. Delete events
+            cursor.execute('DELETE FROM events WHERE session_id = ?', (session_id,))
+            
+            # 6. Delete students
+            cursor.execute('DELETE FROM students WHERE session_id = ?', (session_id,))
+            
+            # 7. Delete session
+            cursor.execute('DELETE FROM sessions WHERE session_id = ?', (session_id,))
+            
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error deleting session: {e}")
+            return False
 
 # Global database instance
 db = DatabaseManager()

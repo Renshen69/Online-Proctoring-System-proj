@@ -1,9 +1,9 @@
 import React from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
-import Admin from './pages/Admin';
-import Student from './pages/Student';
+import AuthPage from './pages/AuthPage';
 import AdminDashboard from './pages/AdminDashboard';
+import StudentDashboard from './pages/StudentDashboard';
 import StudentLogin from './pages/StudentLogin';
 
 const App: React.FC = () => {
@@ -13,10 +13,11 @@ const App: React.FC = () => {
         <Routes>
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/admin-auth" element={<AuthPage />} />
           <Route path="/student-login" element={<StudentLogin />} />
-          <Route path="/admin" element={<Admin />} />
+          <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin-dashboard" element={<AdminDashboard />} />
-          <Route path="/student/:sessionId/:rollNo" element={<Student />} />
+          <Route path="/student/:sessionId/:rollNo" element={<StudentDashboard />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </div>

@@ -17,13 +17,9 @@ const Login: React.FC = () => {
         return;
       }
 
-      const response = await axios.post('http://127.0.0.1:8000/api/login', { role: selectedRole });
-      if (response.data.status === 'success') {
-        if (selectedRole === 'admin') {
-          navigate('/admin');
-        }
-      } else {
-        setError(response.data.message || 'Login failed');
+      if (selectedRole === 'admin') {
+        navigate('/admin-auth');
+        return;
       }
     } catch (err) {
       setError('An error occurred. Please try again.');

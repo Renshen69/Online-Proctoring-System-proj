@@ -1,12 +1,11 @@
 import { useState, useEffect, useRef } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import axios from "axios";
 import Webcam from "react-webcam";
+import CustomExam from "../components/CustomExam";
 
 export default function StudentDashboard() {
-  const [searchParams] = useSearchParams();
-  const sessionId = searchParams.get("session_id");
-  const rollNo = searchParams.get("roll_no");
+  const { sessionId, rollNo } = useParams<{ sessionId: string; rollNo: string }>();
   const [session, setSession] = useState<any>(null);
   const [proctoringStatus, setProctoringStatus] = useState("Connecting...");
   const [isConnected, setIsConnected] = useState(false);
@@ -16,30 +15,62 @@ export default function StudentDashboard() {
   const [isEndingTest, setIsEndingTest] = useState(false);
   const webcamRef = useRef<Webcam>(null);
 
+  // Fetch session data
   useEffect(() => {
     const fetchSession = async () => {
       try {
+        console.log(`Fetching session data for ${sessionId}/${rollNo}`);
         const response = await axios.get(`http://127.0.0.1:8000/api/student-dashboard/${sessionId}/${rollNo}`);
+        console.log('Session response:', response.data);
         if (response.data.status === "success") {
           setSession(response.data.data);
           setIsConnected(true);
+          console.log('Session data loaded successfully');
+        } else {
+          console.error('Session fetch failed:', response.data.message);
+          setProctoringStatus("Session Error");
         }
       } catch (error) {
         console.error("Error fetching session:", error);
+        setProctoringStatus("Connection Error");
       }
     };
 
     if (sessionId && rollNo) {
       fetchSession();
     }
+  }, [sessionId, rollNo]);
 
+  // WebSocket connection
+  useEffect(() => {
     const ws = new WebSocket(`ws://127.0.0.1:8000/ws/student`);
 
+    ws.onopen = () => {
+      console.log('WebSocket connected');
+      setProctoringStatus("Connected");
+    };
+
     ws.onmessage = (event) => {
-      // Handle WebSocket messages if needed
       console.log('WebSocket message:', event.data);
     };
 
+    ws.onclose = () => {
+      console.log('WebSocket disconnected');
+      setProctoringStatus("Disconnected");
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+      setProctoringStatus("Connection Error");
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, []);
+
+  // Frame submission interval
+  useEffect(() => {
     const interval = setInterval(() => {
       if (webcamRef.current && session && !isTestEnded) {
         const frame = webcamRef.current.getScreenshot();
@@ -57,7 +88,6 @@ export default function StudentDashboard() {
     }, 1000);
 
     return () => {
-      ws.close();
       clearInterval(interval);
     };
   }, [sessionId, rollNo, session, isTestEnded]);
@@ -112,7 +142,7 @@ export default function StudentDashboard() {
   };
 
 
-  if (!session?.google_form_link) {
+  if (!session) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center p-4">
         <div className="card max-w-md text-center">
@@ -123,6 +153,11 @@ export default function StudentDashboard() {
           </div>
           <h2 className="text-xl font-semibold text-secondary-900 mb-2">Loading Test</h2>
           <p className="text-secondary-600">Please wait while we prepare your session...</p>
+          <div className="mt-4 text-sm text-secondary-500">
+            <p>Session ID: {sessionId}</p>
+            <p>Roll No: {rollNo}</p>
+            <p>Status: {proctoringStatus}</p>
+          </div>
         </div>
       </div>
     );
@@ -158,11 +193,11 @@ export default function StudentDashboard() {
 
         {/* Test Content */}
         <div className="flex-1 bg-white">
-          <iframe 
-            src={session.google_form_link} 
-            className="w-full h-full border-0" 
-            allowFullScreen
-            title="Test Content"
+          <CustomExam
+            sessionId={sessionId!}
+            rollNo={rollNo!}
+            examTitle={session.exam_title || 'Untitled Exam'}
+            examDescription={session.exam_description}
           />
         </div>
       </div>
