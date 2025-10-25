@@ -1,6 +1,6 @@
 import cv2
 import time
-from app.utils import NonBlockingQueue
+from .utils import NonBlockingQueue
 
 def capture_frames(video_path, frame_queue: NonBlockingQueue, stop_event):
     """

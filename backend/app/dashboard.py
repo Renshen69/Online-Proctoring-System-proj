@@ -9,12 +9,12 @@ import os
 import time
 import json
 from dotenv import load_dotenv
-from app.capture import capture_frames
-from app.head_pose import get_head_pose
-from app.gaze import get_gaze
-from app.device_detector import detect_device
-from app.attention import AttentionScorer
-from app.utils import NonBlockingQueue, get_current_timestamp, format_as_json
+from .capture import capture_frames
+from .head_pose import get_head_pose
+from .gaze import get_gaze
+from .device_detector import detect_device
+from .attention import AttentionScorer
+from .utils import NonBlockingQueue, get_current_timestamp, format_as_json
 
 # Load environment variables
 load_dotenv()

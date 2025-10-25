@@ -1,61 +1,62 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useParams } from 'react-router-dom';
-import axios from 'axios';
-import Webcam from 'react-webcam';
+import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
+import axios from "axios";
+import Webcam from "react-webcam";
 
-const Student: React.FC = () => {
-  const { sessionId, rollNo } = useParams<{ sessionId: string; rollNo: string }>();
-  const [googleFormLink, setGoogleFormLink] = useState('');
-  const [error, setError] = useState('');
-  const [proctoringStatus, setProctoringStatus] = useState('Connecting...');
+export default function StudentDashboard() {
+  const [searchParams] = useSearchParams();
+  const sessionId = searchParams.get("session_id");
+  const [session, setSession] = useState<any>(null);
+  const [proctoringStatus, setProctoringStatus] = useState("Connecting...");
   const [isConnected, setIsConnected] = useState(false);
   const [timeElapsed, setTimeElapsed] = useState(0);
   const webcamRef = useRef<Webcam>(null);
 
   useEffect(() => {
-    const fetchSessionData = async () => {
+    const fetchSession = async () => {
       try {
-        const response = await axios.get(`http://127.0.0.1:8000/api/student-dashboard/${sessionId}/${rollNo}`);
-        if (response.data.status === 'success') {
-          setGoogleFormLink(response.data.data.google_form_link);
+        const response = await axios.get(`http://localhost:8000/api/session/${sessionId}`);
+        if (response.data.status === "success") {
+          setSession(response.data.data);
           setIsConnected(true);
-        } else {
-          setError(response.data.message || 'Could not load session');
         }
-      } catch (err) {
-        setError('Failed to load session data.');
+      } catch (error) {
+        console.error("Error fetching session:", error);
       }
     };
 
-    if (sessionId && rollNo) {
-      fetchSessionData();
+    if (sessionId) {
+      fetchSession();
     }
-  }, [sessionId, rollNo]);
 
-  useEffect(() => {
+    const ws = new WebSocket(`ws://localhost:8000/ws/${session?.student_id}`);
+
+    ws.onmessage = (event) => {
+      // Handle WebSocket messages if needed
+      console.log('WebSocket message:', event.data);
+    };
+
     const interval = setInterval(() => {
-      if (webcamRef.current && isConnected) {
-        const imageSrc = webcamRef.current.getScreenshot();
-        if (imageSrc) {
-          // Remove the "data:image/jpeg;base64," prefix
-          const base64Data = imageSrc.split(",")[1];
-
-          axios.post('http://127.0.0.1:8000/api/submit-frame', { 
-            session_id: sessionId, 
-            roll_no: rollNo,
-            frame: base64Data
-          }).then(response => {
-            setProctoringStatus(response.data.proctoring_status || 'Monitoring...');
-          }).catch(err => {
-            console.error('Error submitting frame:', err);
-            setProctoringStatus('Connection Error');
-          });
-        }
+      if (webcamRef.current && session) {
+        const frame = webcamRef.current.getScreenshot();
+        axios.post("http://localhost:8000/api/submit-frame", {
+          session_id: sessionId,
+          student_id: session.student_id,
+          frame: frame,
+        }).then(response => {
+          setProctoringStatus(response.data.proctoring_status || 'Monitoring...');
+        }).catch(err => {
+          console.error('Error submitting frame:', err);
+          setProctoringStatus('Connection Error');
+        });
       }
-    }, 1000); // Send a frame every second
+    }, 1000);
 
-    return () => clearInterval(interval);
-  }, [sessionId, rollNo, isConnected]);
+    return () => {
+      ws.close();
+      clearInterval(interval);
+    };
+  }, [sessionId, session]);
 
   // Timer effect
   useEffect(() => {
@@ -82,29 +83,7 @@ const Student: React.FC = () => {
     return 'status-neutral';
   };
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center p-4">
-        <div className="card max-w-md text-center">
-          <div className="w-16 h-16 bg-danger-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-danger-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <h2 className="text-xl font-semibold text-secondary-900 mb-2">Session Error</h2>
-          <p className="text-danger-600 mb-4">{error}</p>
-          <button 
-            onClick={() => window.location.reload()} 
-            className="btn-primary"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!googleFormLink) {
+  if (!session?.google_form_link) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center p-4">
         <div className="card max-w-md text-center">
@@ -151,7 +130,7 @@ const Student: React.FC = () => {
         {/* Test Content */}
         <div className="flex-1 bg-white">
           <iframe 
-            src={googleFormLink} 
+            src={session.google_form_link} 
             className="w-full h-full border-0" 
             allowFullScreen
             title="Test Content"
@@ -255,6 +234,4 @@ const Student: React.FC = () => {
       </div>
     </div>
   );
-};
-
-export default Student;
+}

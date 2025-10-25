@@ -1,9 +1,9 @@
 # proctor_ai/analyze_frame.py
 import cv2
-from app.head_pose import get_head_pose
-from app.gaze import get_gaze
-from app.device_detector import detect_device
-from app.attention import AttentionScorer
+from .head_pose import get_head_pose
+from .gaze import get_gaze
+from .device_detector import detect_device
+from .attention import AttentionScorer
 
 # Thresholds (can also load from .env)
 HEAD_POSE_YAW_THRESHOLD = 25

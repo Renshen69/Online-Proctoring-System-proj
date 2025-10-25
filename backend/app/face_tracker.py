@@ -1,7 +1,7 @@
 # proctor_ai/face_tracker.py
 import cv2
 import numpy as np
-from app.head_pose import get_head_pose
+from .head_pose import get_head_pose
 
 def analyze_frame(frame_bytes):
     # Convert bytes to numpy array

@@ -2,26 +2,26 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
-const Login: React.FC = () => {
+const StudentLogin: React.FC = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [rollNo, setRollNo] = useState('');
+  const [sessionId, setSessionId] = useState('');
   const navigate = useNavigate();
 
-  const handleLogin = async (selectedRole: string) => {
+  const handleStudentLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
     setIsLoading(true);
     setError('');
-    
-    try {
-      if (selectedRole === 'student') {
-        navigate('/student-login');
-        return;
-      }
 
-      const response = await axios.post('http://127.0.0.1:8000/api/login', { role: selectedRole });
+    try {
+      const response = await axios.post('http://127.0.0.1:8000/api/student-login', {
+        roll_no: rollNo,
+        session_id: sessionId,
+      });
+
       if (response.data.status === 'success') {
-        if (selectedRole === 'admin') {
-          navigate('/admin');
-        }
+        navigate(`/student/${sessionId}/${rollNo}`);
       } else {
         setError(response.data.message || 'Login failed');
       }
@@ -50,8 +50,8 @@ const Login: React.FC = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             </div>
-            <h1 className="text-3xl font-bold text-gradient mb-2">ProctorHub</h1>
-            <p className="text-secondary-600">Select your role to continue</p>
+            <h1 className="text-3xl font-bold text-gradient mb-2">Student Login</h1>
+            <p className="text-secondary-600">Enter your details to join the session</p>
           </div>
 
           {/* Error Message */}
@@ -66,33 +66,26 @@ const Login: React.FC = () => {
             </div>
           )}
 
-          {/* Role Selection */}
-          <div className="space-y-4">
-            {/* Admin Button */}
+          {/* Student Login Form */}
+          <form onSubmit={handleStudentLogin} className="space-y-4">
+            <input
+              type="text"
+              placeholder="Enter your Roll Number"
+              value={rollNo}
+              onChange={(e) => setRollNo(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border-2 border-secondary-200 focus:outline-none focus:ring-2 focus:ring-primary-500 transition"
+              required
+            />
+            <input
+              type="text"
+              placeholder="Enter Session ID"
+              value={sessionId}
+              onChange={(e) => setSessionId(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border-2 border-secondary-200 focus:outline-none focus:ring-2 focus:ring-primary-500 transition"
+              required
+            />
             <button
-              onClick={() => handleLogin('admin')}
-              disabled={isLoading}
-              className="w-full group relative overflow-hidden bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-300 shadow-soft hover:shadow-medium focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <div className="flex items-center justify-center">
-                <svg className="w-5 h-5 mr-3 group-hover:scale-110 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                </svg>
-                {isLoading ? (
-                  <div className="flex items-center">
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-3"></div>
-                    Connecting...
-                  </div>
-                ) : (
-                  'Login as Admin'
-                )}
-              </div>
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
-            </button>
-
-            {/* Student Button */}
-            <button
-              onClick={() => handleLogin('student')}
+              type="submit"
               disabled={isLoading}
               className="w-full group relative overflow-hidden bg-gradient-to-r from-success-600 to-success-700 hover:from-success-700 hover:to-success-800 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-300 shadow-soft hover:shadow-medium focus:outline-none focus:ring-2 focus:ring-success-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -106,12 +99,12 @@ const Login: React.FC = () => {
                     Connecting...
                   </div>
                 ) : (
-                  'Login as Student'
+                  'Join Session'
                 )}
               </div>
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
             </button>
-          </div>
+          </form>
 
           {/* Footer */}
           <div className="mt-8 text-center">
@@ -125,4 +118,4 @@ const Login: React.FC = () => {
   );
 };
 
-export default Login;
+export default StudentLogin;

@@ -1,88 +1,70 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-
-interface StudentData {
-  status: string;
-  results: any; // Consider defining a more specific type for results
-}
+import { useState, useEffect } from "react";
+import axios from "axios";
 
 interface Session {
+  student_id: string;
+  status: string;
   google_form_link: string;
-  students: Record<string, StudentData>;
 }
 
-const Admin: React.FC = () => {
-  const [googleFormLink, setGoogleFormLink] = useState('');
-  const [students, setStudents] = useState('');
-  const [generatedLink, setGeneratedLink] = useState('');
+export default function AdminDashboard() {
   const [sessions, setSessions] = useState<Record<string, Session>>({});
-  const [error, setError] = useState('');
+  const [newTestLink, setNewTestLink] = useState("");
+  const [newStudentId, setNewStudentId] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [error, setError] = useState("");
+  const [generatedLink, setGeneratedLink] = useState("");
 
   useEffect(() => {
-    // Fetch initial sessions
-    const fetchSessions = async () => {
+    const fetchAdminStatus = async () => {
       try {
-        const response = await axios.get('http://127.0.0.1:8000/api/admin-status');
+        const response = await axios.get("http://localhost:8000/api/admin-status");
         setSessions(response.data);
-      } catch (err) {
-        console.error('Failed to fetch sessions', err);
+      } catch (error) {
+        console.error("Error fetching admin status:", error);
       }
     };
 
-    fetchSessions();
+    fetchAdminStatus();
 
-    // WebSocket connection
-    const ws = new WebSocket('ws://127.0.0.1:8000/ws/admin');
+    const ws = new WebSocket("ws://localhost:8000/ws/admin");
 
     ws.onmessage = (event) => {
-      console.log('WebSocket message received:', event.data);
       const message = JSON.parse(event.data);
-      if (message.type === 'status_update') {
+      if (message.type === "status_update") {
         setSessions(message.data);
       }
     };
 
-    ws.onclose = () => console.log('WebSocket disconnected');
-
-    return () => ws.close();
+    return () => {
+      ws.close();
+    };
   }, []);
 
-  const handleCreateSession = async (e: React.FormEvent) => {
+  const handleBroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setGeneratedLink('');
+    setError("");
+    setGeneratedLink("");
     setIsCreating(true);
 
     try {
-      const studentList = students.split('\n').filter(s => s.trim() !== '');
-      const response = await axios.post('http://127.0.0.1:8000/api/start-session', { 
-        google_form_link: googleFormLink, 
-        students: studentList 
+      const response = await axios.post("http://localhost:8000/api/start-session", {
+        google_form_link: newTestLink,
+        student_id: newStudentId,
       });
       if (response.data.status === 'success') {
         const studentLink = `${window.location.origin}/student/${response.data.session_id}`;
         setGeneratedLink(studentLink);
-        setGoogleFormLink('');
-        setStudents('');
+        setNewTestLink("");
+        setNewStudentId("");
       } else {
         setError(response.data.message || 'Failed to create session');
       }
-    } catch (err) {
+    } catch (error) {
+      console.error("Error broadcasting new test:", error);
       setError('An error occurred while creating the session.');
     } finally {
       setIsCreating(false);
-    }
-  };
-
-  const handleStopSession = async (sessionId: string, rollNo: string) => {
-    try {
-      await axios.post('http://127.0.0.1:8000/api/stop-session', { 
-        session_id: sessionId, 
-        roll_no: rollNo 
-      });
-    } catch (err) {
-      console.error('Failed to stop session', err);
     }
   };
 
@@ -94,7 +76,6 @@ const Admin: React.FC = () => {
       'Multiple faces detected': 'status-danger',
       'Device Detected': 'status-danger',
       'Not Started': 'status-neutral',
-      'Finished': 'status-finished',
     };
     
     return statusClasses[status as keyof typeof statusClasses] || 'status-neutral';
@@ -144,49 +125,49 @@ const Admin: React.FC = () => {
             </div>
           </div>
 
-          <form onSubmit={handleCreateSession} className="space-y-4">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="flex-1">
+          <form onSubmit={handleBroadcast} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
                 <label className="block text-sm font-medium text-secondary-700 mb-2">
                   Google Form Link
                 </label>
                 <input
                   type="url"
-                  value={googleFormLink}
-                  onChange={(e) => setGoogleFormLink(e.target.value)}
+                  value={newTestLink}
+                  onChange={(e) => setNewTestLink(e.target.value)}
                   placeholder="https://forms.gle/..."
                   className="input-field"
                   required
                 />
               </div>
-              <div className="flex-1">
+              <div>
                 <label className="block text-sm font-medium text-secondary-700 mb-2">
-                  Student Roll Numbers (one per line)
+                  Student ID (Optional)
                 </label>
-                <textarea
-                  value={students}
-                  onChange={(e) => setStudents(e.target.value)}
-                  placeholder="101\n102\n103"
-                  className="input-field h-24"
-                  required
+                <input
+                  type="text"
+                  value={newStudentId}
+                  onChange={(e) => setNewStudentId(e.target.value)}
+                  placeholder="Enter student ID"
+                  className="input-field"
                 />
               </div>
-              <div className="sm:pt-6">
-                <button 
-                  type="submit" 
-                  disabled={isCreating}
-                  className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isCreating ? (
-                    <div className="flex items-center">
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                      Creating...
-                    </div>
-                  ) : (
-                    'Create Session'
-                  )}
-                </button>
-              </div>
+            </div>
+            <div className="flex justify-end">
+              <button 
+                type="submit" 
+                disabled={isCreating}
+                className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isCreating ? (
+                  <div className="flex items-center">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    Creating...
+                  </div>
+                ) : (
+                  'Create Session'
+                )}
+              </button>
             </div>
           </form>
 
@@ -252,84 +233,51 @@ const Admin: React.FC = () => {
 
           {Object.keys(sessions).length > 0 ? (
             <div className="space-y-4">
-              {Object.entries(sessions).map(([sessionId, sessionData]) => (
+              {Object.entries(sessions).map(([sessionId, sessionData], index) => (
                 <div 
                   key={sessionId} 
                   className="p-6 bg-gradient-to-r from-white to-secondary-50 border border-secondary-200 rounded-xl hover:shadow-medium transition-all duration-200 animate-slide-up"
+                  style={{ animationDelay: `${index * 0.1}s` }}
                 >
-                  {Object.entries(sessionData.students).map(([rollNo, studentData]) => (
-                    <div key={rollNo}>
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-4 mb-3">
-                            <div className="flex items-center space-x-2">
-                              <span className="text-sm font-medium text-secondary-600">Session ID:</span>
-                              <span className="font-mono text-sm bg-primary-100 px-2 py-1 rounded text-primary-800 font-bold">
-                                {sessionId}
-                              </span>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <span className="text-sm font-medium text-secondary-600">Student:</span>
-                              <span className="font-mono text-sm bg-success-100 px-2 py-1 rounded text-success-800 font-bold">
-                                {rollNo}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <span className="text-sm text-secondary-600">Form:</span>
-                            <a 
-                              href={sessionData.google_form_link} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="text-sm text-primary-600 hover:text-primary-700 hover:underline truncate max-w-md"
-                            >
-                              {sessionData.google_form_link}
-                            </a>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-3">
-                          <span className={`status-badge ${getStatusBadge(studentData.status)}`}>
-                            {studentData.status}
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-4 mb-3">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-medium text-secondary-600">Session ID:</span>
+                          <span className="font-mono text-sm bg-secondary-100 px-2 py-1 rounded text-secondary-800">
+                            {sessionId.slice(0, 8)}...
                           </span>
-                          {studentData.status !== 'Finished' && (
-                            <button 
-                              onClick={() => handleStopSession(sessionId, rollNo)}
-                              className="btn-danger"
-                            >
-                              Stop
-                            </button>
-                          )}
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-medium text-secondary-600">Student:</span>
+                          <span className="text-sm text-secondary-800">
+                            {sessionData.student_id || 'Not Joined'}
+                          </span>
                         </div>
                       </div>
-                      {studentData.results && (
-                        <div className="mt-4 pt-4 border-t border-secondary-200">
-                          <h4 className="text-md font-semibold text-secondary-800 mb-2">Results</h4>
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div className="bg-secondary-100 p-3 rounded-lg">
-                              <p className="font-medium text-secondary-600">Avg. Attention</p>
-                              <p className="font-bold text-lg text-primary-600">{studentData.results.average_attention_score.toFixed(2)}%</p>
-                            </div>
-                            <div className="bg-secondary-100 p-3 rounded-lg">
-                              <p className="font-medium text-secondary-600">Distractions</p>
-                              <p className="font-bold text-lg text-danger-600">{studentData.results.distracted_count}</p>
-                            </div>
-                            <div className="bg-secondary-100 p-3 rounded-lg">
-                              <p className="font-medium text-secondary-600">Multiple Faces</p>
-                              <p className="font-bold text-lg text-danger-600">{studentData.results.multiple_faces_count}</p>
-                            </div>
-                            <div className="bg-secondary-100 p-3 rounded-lg">
-                              <p className="font-medium text-secondary-600">No Face</p>
-                              <p className="font-bold text-lg text-danger-600">{studentData.results.no_face_count}</p>
-                            </div>
-                            <div className="bg-secondary-100 p-3 rounded-lg">
-                              <p className="font-medium text-secondary-600">Device Detected</p>
-                              <p className="font-bold text-lg text-danger-600">{studentData.results.device_detected_count}</p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm text-secondary-600">Form:</span>
+                        <a 
+                          href={sessionData.google_form_link} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-sm text-primary-600 hover:text-primary-700 hover:underline truncate max-w-md"
+                        >
+                          {sessionData.google_form_link}
+                        </a>
+                      </div>
                     </div>
-                  ))}
+                    <div className="flex items-center space-x-3">
+                      <span className={`status-badge ${getStatusBadge(sessionData.status)}`}>
+                        {sessionData.status}
+                      </span>
+                      <button className="p-2 text-secondary-400 hover:text-secondary-600 transition-colors">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
@@ -348,6 +296,4 @@ const Admin: React.FC = () => {
       </div>
     </div>
   );
-};
-
-export default Admin;
+}
