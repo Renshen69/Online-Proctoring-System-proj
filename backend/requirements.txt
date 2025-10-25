@@ -8,3 +8,5 @@ numpy
 ultralytics
 python-dotenv
 streamlit
+requests
+email-validator

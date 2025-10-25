@@ -17,13 +17,9 @@ const Login: React.FC = () => {
         return;
       }
 
-      const response = await axios.post('http://127.0.0.1:8000/api/login', { role: selectedRole });
-      if (response.data.status === 'success') {
-        if (selectedRole === 'admin') {
-          navigate('/admin');
-        }
-      } else {
-        setError(response.data.message || 'Login failed');
+      if (selectedRole === 'admin') {
+        navigate('/admin-login');
+        return;
       }
     } catch (err) {
       setError('An error occurred. Please try again.');
@@ -115,8 +111,17 @@ const Login: React.FC = () => {
 
           {/* Footer */}
           <div className="mt-8 text-center">
-            <p className="text-sm text-secondary-500">
+            <p className="text-sm text-secondary-500 mb-4">
               Secure online proctoring system
+            </p>
+            <p className="text-sm text-secondary-600">
+              New admin?{' '}
+              <button 
+                onClick={() => navigate('/admin-signup')}
+                className="text-primary-600 hover:text-primary-700 font-medium underline"
+              >
+                Create admin account
+              </button>
             </p>
           </div>
         </div>

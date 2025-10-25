@@ -8,6 +8,7 @@ class DatabaseManager:
     def __init__(self, db_path: str = "proctoring.db"):
         self.db_path = db_path
         self.init_database()
+        self.migrate_database()
     
     def init_database(self):
         """Initialize the database with required tables."""
@@ -78,8 +79,53 @@ class DatabaseManager:
             )
         ''')
         
+        # Admin credentials table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS admin_credentials (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                is_verified BOOLEAN DEFAULT 0,
+                otp_code TEXT,
+                otp_expires_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                is_active BOOLEAN DEFAULT 1
+            )
+        ''')
+        
         conn.commit()
         conn.close()
+    
+    def migrate_database(self):
+        """Migrate existing database to new schema."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Check if email column exists
+            cursor.execute("PRAGMA table_info(admin_credentials)")
+            columns = [column[1] for column in cursor.fetchall()]
+            
+            if 'email' not in columns:
+                print("Migrating admin_credentials table to add email column...")
+                # Add new columns
+                cursor.execute('ALTER TABLE admin_credentials ADD COLUMN email TEXT')
+                cursor.execute('ALTER TABLE admin_credentials ADD COLUMN is_verified BOOLEAN DEFAULT 0')
+                cursor.execute('ALTER TABLE admin_credentials ADD COLUMN otp_code TEXT')
+                cursor.execute('ALTER TABLE admin_credentials ADD COLUMN otp_expires_at TIMESTAMP')
+                
+                # Update existing admin record with default email
+                cursor.execute('UPDATE admin_credentials SET email = ? WHERE email IS NULL', ('admin@proctorhub.com',))
+                
+                conn.commit()
+                print("Database migration completed successfully!")
+            
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error during database migration: {e}")
+            return False
     
     def create_session(self, session_id: str, google_form_link: str, students: List[str]) -> bool:
         """Create a new session in the database."""
@@ -379,6 +425,167 @@ class DatabaseManager:
         except Exception as e:
             print(f"Error getting session events: {e}")
             return []
+    
+    def create_admin(self, username: str, email: str, password: str) -> bool:
+        """Create a new admin user."""
+        try:
+            import hashlib
+            password_hash = hashlib.sha256(password.encode()).hexdigest()
+            
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                INSERT INTO admin_credentials (username, email, password_hash)
+                VALUES (?, ?, ?)
+            ''', (username, email, password_hash))
+            
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error creating admin: {e}")
+            return False
+    
+    def create_admin_with_otp(self, username: str, email: str, password: str, otp_code: str) -> bool:
+        """Create a new admin user with OTP verification."""
+        try:
+            import hashlib
+            from datetime import datetime, timedelta
+            password_hash = hashlib.sha256(password.encode()).hexdigest()
+            
+            # OTP expires in 10 minutes
+            otp_expires = datetime.now() + timedelta(minutes=10)
+            
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                INSERT INTO admin_credentials (username, email, password_hash, otp_code, otp_expires_at)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (username, email, password_hash, otp_code, otp_expires.isoformat()))
+            
+            conn.commit()
+            conn.close()
+            return True
+        except Exception as e:
+            print(f"Error creating admin with OTP: {e}")
+            return False
+    
+    def verify_admin(self, username: str, password: str) -> bool:
+        """Verify admin credentials."""
+        try:
+            import hashlib
+            password_hash = hashlib.sha256(password.encode()).hexdigest()
+            
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT password_hash FROM admin_credentials 
+                WHERE username = ? AND is_active = 1 AND is_verified = 1
+            ''', (username,))
+            
+            result = cursor.fetchone()
+            conn.close()
+            
+            return result and result[0] == password_hash
+        except Exception as e:
+            print(f"Error verifying admin: {e}")
+            return False
+    
+    def verify_admin_by_email(self, email: str, password: str) -> bool:
+        """Verify admin credentials using email."""
+        try:
+            import hashlib
+            password_hash = hashlib.sha256(password.encode()).hexdigest()
+            
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT password_hash FROM admin_credentials 
+                WHERE email = ? AND is_active = 1 AND is_verified = 1
+            ''', (email,))
+            
+            result = cursor.fetchone()
+            conn.close()
+            
+            return result and result[0] == password_hash
+        except Exception as e:
+            print(f"Error verifying admin by email: {e}")
+            return False
+    
+    def verify_otp(self, email: str, otp_code: str) -> bool:
+        """Verify OTP code for admin registration."""
+        try:
+            from datetime import datetime
+            
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT otp_code, otp_expires_at FROM admin_credentials 
+                WHERE email = ? AND is_verified = 0
+            ''', (email,))
+            
+            result = cursor.fetchone()
+            if not result:
+                conn.close()
+                return False
+            
+            stored_otp, expires_at = result
+            
+            # Check if OTP is expired
+            if expires_at:
+                expires_time = datetime.fromisoformat(expires_at)
+                if datetime.now() > expires_time:
+                    conn.close()
+                    return False
+            
+            # Verify OTP
+            if stored_otp == otp_code:
+                # Mark as verified
+                cursor.execute('''
+                    UPDATE admin_credentials 
+                    SET is_verified = 1, otp_code = NULL, otp_expires_at = NULL
+                    WHERE email = ?
+                ''', (email,))
+                conn.commit()
+                conn.close()
+                return True
+            
+            conn.close()
+            return False
+        except Exception as e:
+            print(f"Error verifying OTP: {e}")
+            return False
+    
+    def get_admin_by_email(self, email: str) -> dict:
+        """Get admin details by email."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                SELECT username, email, is_verified, created_at FROM admin_credentials 
+                WHERE email = ?
+            ''', (email,))
+            
+            result = cursor.fetchone()
+            conn.close()
+            
+            if result:
+                return {
+                    'username': result[0],
+                    'email': result[1],
+                    'is_verified': result[2],
+                    'created_at': result[3]
+                }
+            return None
+        except Exception as e:
+            print(f"Error getting admin by email: {e}")
+            return None
 
 # Global database instance
 db = DatabaseManager()

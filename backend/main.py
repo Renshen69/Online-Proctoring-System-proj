@@ -1,11 +1,14 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import json
 import uuid
 import base64
+import sqlite3
+import re
 from app.head_pose import get_head_pose
 from app.analyze_frame import analyze_frame
+from app.email_service import email_service
 import numpy as np
 import cv2
 from database import db
@@ -76,6 +79,162 @@ async def login(data: dict):
     if data.get("role") in ["admin", "student"]:
         return {"status": "success", "role": data.get("role")}
     return {"status": "error", "message": "Invalid role"}
+
+@app.post("/api/admin-signup")
+async def admin_signup(data: dict):
+    """Admin signup with email verification."""
+    username = data.get("username")
+    email = data.get("email")
+    password = data.get("password")
+    
+    if not username or not email or not password:
+        return {"status": "error", "message": "Username, email, and password are required"}
+    
+    # Validate email format
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(email_pattern, email):
+        return {"status": "error", "message": "Invalid email format"}
+    
+    # Check if email already exists and is verified
+    existing_admin = db.get_admin_by_email(email)
+    if existing_admin and existing_admin['is_verified']:
+        return {"status": "error", "message": "Email already registered and verified. Please login instead."}
+    
+    # If email exists but not verified, update the existing record with new OTP
+    if existing_admin and not existing_admin['is_verified']:
+        # Generate new OTP
+        otp_code = email_service.generate_otp()
+        
+        # Update existing admin with new OTP
+        try:
+            import hashlib
+            conn = sqlite3.connect("proctoring.db")
+            cursor = conn.cursor()
+            from datetime import datetime, timedelta
+            
+            # OTP expires in 10 minutes
+            otp_expires = datetime.now() + timedelta(minutes=10)
+            
+            cursor.execute('''
+                UPDATE admin_credentials 
+                SET username = ?, password_hash = ?, otp_code = ?, otp_expires_at = ?, is_verified = 0
+                WHERE email = ?
+            ''', (username, hashlib.sha256(password.encode()).hexdigest(), otp_code, otp_expires.isoformat(), email))
+            
+            conn.commit()
+            conn.close()
+            
+            # Send OTP email
+            if email_service.send_otp_email(email, otp_code, username):
+                return {"status": "success", "message": "OTP sent to your email. Please check your inbox."}
+            else:
+                return {"status": "error", "message": "Failed to send OTP email. Please try again."}
+        except Exception as e:
+            return {"status": "error", "message": "Failed to update admin account. Please try again."}
+    
+    # Generate OTP
+    otp_code = email_service.generate_otp()
+    
+    # Create admin with OTP
+    if db.create_admin_with_otp(username, email, password, otp_code):
+        # Send OTP email
+        if email_service.send_otp_email(email, otp_code, username):
+            return {"status": "success", "message": "OTP sent to your email. Please check your inbox."}
+        else:
+            return {"status": "error", "message": "Failed to send OTP email. Please try again."}
+    else:
+        return {"status": "error", "message": "Failed to create admin account. Username or email may already exist."}
+
+@app.post("/api/verify-otp")
+async def verify_otp(data: dict):
+    """Verify OTP for admin registration."""
+    email = data.get("email")
+    otp_code = data.get("otp")
+    
+    if not email or not otp_code:
+        return {"status": "error", "message": "Email and OTP are required"}
+    
+    if db.verify_otp(email, otp_code):
+        # Send welcome email
+        admin_info = db.get_admin_by_email(email)
+        if admin_info:
+            email_service.send_welcome_email(email, admin_info['username'])
+        
+        return {"status": "success", "message": "Email verified successfully! You can now login."}
+    else:
+        return {"status": "error", "message": "Invalid or expired OTP"}
+
+@app.post("/api/resend-otp")
+async def resend_otp(data: dict):
+    """Resend OTP for admin registration."""
+    email = data.get("email")
+    
+    if not email:
+        return {"status": "error", "message": "Email is required"}
+    
+    # Check if admin exists
+    admin_info = db.get_admin_by_email(email)
+    if not admin_info:
+        return {"status": "error", "message": "Email not found. Please sign up first."}
+    
+    if admin_info['is_verified']:
+        return {"status": "error", "message": "Email already verified. Please login."}
+    
+    # Generate new OTP
+    otp_code = email_service.generate_otp()
+    
+    # Update OTP in database
+    try:
+        conn = sqlite3.connect("proctoring.db")
+        cursor = conn.cursor()
+        from datetime import datetime, timedelta
+        
+        # OTP expires in 10 minutes
+        otp_expires = datetime.now() + timedelta(minutes=10)
+        
+        cursor.execute('''
+            UPDATE admin_credentials 
+            SET otp_code = ?, otp_expires_at = ?
+            WHERE email = ?
+        ''', (otp_code, otp_expires.isoformat(), email))
+        
+        conn.commit()
+        conn.close()
+        
+        # Send OTP email
+        if email_service.send_otp_email(email, otp_code, admin_info['username']):
+            return {"status": "success", "message": "OTP resent successfully! Please check your email."}
+        else:
+            return {"status": "error", "message": "Failed to send OTP email. Please try again."}
+            
+    except Exception as e:
+        return {"status": "error", "message": "Failed to resend OTP. Please try again."}
+
+@app.post("/api/admin-login")
+async def admin_login(data: dict):
+    """Admin login with credentials verification."""
+    username_or_email = data.get("username") or data.get("email")
+    password = data.get("password")
+    
+    if not username_or_email or not password:
+        return {"status": "error", "message": "Username/email and password are required"}
+    
+    # Check if it's an email or username
+    is_email = "@" in username_or_email
+    
+    if is_email:
+        if db.verify_admin_by_email(username_or_email, password):
+            admin_info = db.get_admin_by_email(username_or_email)
+            token = str(uuid.uuid4())
+            return {"status": "success", "token": token, "username": admin_info['username'], "email": username_or_email}
+        else:
+            return {"status": "error", "message": "Invalid email or password"}
+    else:
+        if db.verify_admin(username_or_email, password):
+            token = str(uuid.uuid4())
+            return {"status": "success", "token": token, "username": username_or_email}
+        else:
+            return {"status": "error", "message": "Invalid username or password"}
 
 @app.post("/api/start-session")
 async def start_session(data: dict):
@@ -269,6 +428,35 @@ def load_existing_sessions():
 
 # Load sessions on startup
 load_existing_sessions()
+
+# Initialize default admin user
+def init_default_admin():
+    """Initialize default admin user if none exists."""
+    try:
+        # Check if any admin exists
+        conn = sqlite3.connect("proctoring.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM admin_credentials")
+        admin_count = cursor.fetchone()[0]
+        conn.close()
+        
+        if admin_count == 0:
+            # Create default admin
+            if db.create_admin("admin", "admin@proctorhub.com", "admin123"):
+                # Mark default admin as verified
+                conn = sqlite3.connect("proctoring.db")
+                cursor = conn.cursor()
+                cursor.execute("UPDATE admin_credentials SET is_verified = 1 WHERE username = 'admin'")
+                conn.commit()
+                conn.close()
+                print("Default admin user created: username=admin, email=admin@proctorhub.com, password=admin123")
+            else:
+                print("Failed to create default admin user")
+    except Exception as e:
+        print(f"Error initializing admin: {e}")
+
+# Initialize admin on startup
+init_default_admin()
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
