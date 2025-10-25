@@ -165,6 +165,10 @@ class DatabaseManager:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
+            head_pose = analysis_data.get('head_pose') or {}
+            gaze = analysis_data.get('gaze') or {}
+            device = analysis_data.get('device') or {}
+            
             cursor.execute('''
                 INSERT INTO events (
                     session_id, roll_no, num_faces, head_pose_yaw, head_pose_pitch,
@@ -175,12 +179,12 @@ class DatabaseManager:
                 session_id,
                 roll_no,
                 analysis_data.get('num_faces', 0),
-                analysis_data.get('head_pose', {}).get('yaw', 0),
-                analysis_data.get('head_pose', {}).get('pitch', 0),
-                analysis_data.get('gaze', {}).get('x', 0),
-                analysis_data.get('gaze', {}).get('y', 0),
-                analysis_data.get('device', {}).get('device_detected', False),
-                analysis_data.get('device', {}).get('phone_detected', False),
+                head_pose.get('yaw', 0),
+                head_pose.get('pitch', 0),
+                gaze.get('x', 0),
+                gaze.get('y', 0),
+                device.get('device_detected', False),
+                device.get('phone_detected', False),
                 analysis_data.get('attention_score', 0),
                 analysis_data.get('state', 'unknown'),
                 json.dumps(analysis_data)
@@ -314,7 +318,8 @@ class DatabaseManager:
                 session_data['students'][roll_no] = {
                     'status': row[1],
                     'started_at': row[2],
-                    'ended_at': row[3]
+                    'ended_at': row[3],
+                    'events': []  # Initialize empty events list
                 }
                 
                 # Get results if available
@@ -378,7 +383,8 @@ class DatabaseManager:
                     sessions[session_id]['students'][roll_no] = {
                         'status': student_row[1],
                         'started_at': student_row[2],
-                        'ended_at': student_row[3]
+                        'ended_at': student_row[3],
+                        'events': []  # Initialize empty events list
                     }
                     
                     # Get results if available

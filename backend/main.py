@@ -209,6 +209,8 @@ async def submit_frame(data: dict):
         db.save_event(session_id, roll_no, result)
         
         # Also update in-memory for backward compatibility
+        if "events" not in sessions[session_id]["students"][roll_no]:
+            sessions[session_id]["students"][roll_no]["events"] = []
         sessions[session_id]["students"][roll_no]["status"] = status
         sessions[session_id]["students"][roll_no]["events"].append(result)
 
