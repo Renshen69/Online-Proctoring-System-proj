@@ -1,11 +1,6 @@
 streamlit
 opencv-python
-mediapipe
+mediapipe-silicon
 numpy
 ultralytics
 scipy
-fastapi
-uvicorn
-python-multipart
-websockets
-python-dotenv

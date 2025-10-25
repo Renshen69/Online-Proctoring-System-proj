@@ -3,11 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import json
 import uuid
-import base64
-from app.head_pose import get_head_pose
-from app.analyze_frame import analyze_frame
-import numpy as np
-import cv2
+
 app = FastAPI()
 
 # --- CORS Middleware ---
@@ -27,8 +23,16 @@ active_websockets = {}
 async def send_status_update():
     """Sends the current status of all sessions to all connected admins."""
     if "admin" in active_websockets:
+        status_data = {
+            session_id: {
+                "student_id": data["student_id"],
+                "status": data["status"],
+                "google_form_link": data["google_form_link"],
+            }
+            for session_id, data in sessions.items()
+        }
         for websocket in active_websockets["admin"]:
-            await websocket.send_text(json.dumps({"type": "status_update", "data": sessions}))
+            await websocket.send_text(json.dumps({"type": "status_update", "data": status_data}))
 
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
@@ -60,130 +64,39 @@ async def login(data: dict):
 async def start_session(data: dict):
     """Admin starts a new proctoring session."""
     google_form_link = data.get("google_form_link")
-    students = data.get("students") # List of roll numbers
-
-    if not google_form_link or not students:
-        return {"status": "error", "message": "Google Form link and students (roll numbers) are required"}
+    if not google_form_link:
+        return {"status": "error", "message": "Google Form link is required"}
 
     session_id = str(uuid.uuid4())
     sessions[session_id] = {
         "google_form_link": google_form_link,
-        "students": {
-            student: {"status": "Not Started", "events": []} for student in students
-        },
+        "student_id": None,
+        "status": "Not Started",
     }
     await send_status_update()
-    return {"status": "success", "session_id": session_id, "students": students}
-
-@app.post("/api/student-login")
-async def student_login(data: dict):
-    """Student login with roll number."""
-    roll_no = data.get("roll_no")
-    session_id = data.get("session_id")
-
-    if not roll_no or not session_id:
-        return {"status": "error", "message": "Roll number and session ID are required"}
-
-    if session_id in sessions and roll_no in sessions[session_id]["students"]:
-        return {"status": "success", "message": "Login successful"}
-    
-    return {"status": "error", "message": "Invalid roll number or session ID"}
-
-@app.get("/api/student-dashboard/{session_id}/{roll_no}")
-async def student_dashboard(session_id: str, roll_no: str):
-    """Provides student dashboard details."""
-    if session_id in sessions and roll_no in sessions[session_id]["students"]:
-        session_data = sessions[session_id]
-        student_data = session_data["students"][roll_no]
-        return {
-            "status": "success",
-            "data": {
-                "roll_no": roll_no,
-                "google_form_link": session_data["google_form_link"],
-                "proctoring_status": student_data.get("status", "Not Started"),
-            }
-        }
-    return {"status": "error", "message": "Invalid session ID or roll number"}
-
+    return {"status": "success", "session_id": session_id}
 
 @app.post("/api/submit-frame")
 async def submit_frame(data: dict):
-    try:
-        session_id = data.get("session_id")
-        roll_no = data.get("roll_no")
-        frame_base64 = data.get("frame")
-
-        if session_id not in sessions or roll_no not in sessions[session_id]["students"]:
-            return {"status": "error", "message": "Invalid session ID or roll number"}
-
-        # Convert base64 to numpy array
-        frame_bytes = base64.b64decode(frame_base64.split(",")[-1])  # remove prefix if exists
-        nparr = np.frombuffer(frame_bytes, np.uint8)
-        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        if frame is None:
-            return {"status": "error", "message": "Failed to decode frame"}
-        
-        # --- AI Analysis ---
-        result = analyze_frame(frame)
-        
-        # Determine status
-        if result["num_faces"] == 0:
-            status = "No face detected"
-        elif result["num_faces"] > 1:
-            status = "Multiple faces detected"
-        elif result["state"] in ["distracted", "away"]:
-            status = "Distracted"
-        elif result["state"] == "focused":
-            status = "Focused"
-        else:  # device detected
-            status = "Device Detected"
-
-        sessions[session_id]["students"][roll_no]["status"] = status
-        sessions[session_id]["students"][roll_no]["events"].append(result)
-
-        await send_status_update()
-
-        return {"status": "success", "proctoring_status": status, "analysis": result}
-
-    except Exception as e:
-        print("Error in /submit-frame:", e)
-        return {"status": "error", "message": str(e)}
-
-@app.post("/api/stop-session")
-async def stop_session(data: dict):
+    """Student submits a frame for analysis."""
     session_id = data.get("session_id")
-    roll_no = data.get("roll_no")
+    if session_id not in sessions:
+        return {"status": "error", "message": "Invalid session ID"}
 
-    if session_id not in sessions or roll_no not in sessions[session_id]["students"]:
-        return {"status": "error", "message": "Invalid session ID or roll number"}
-
-    student_data = sessions[session_id]["students"][roll_no]
-    events = student_data.get("events", [])
-
-    if not events:
-        return {"status": "error", "message": "No events found for this student."}
-
-    # Calculate results
-    attention_scores = [event["attention_score"] for event in events]
-    distracted_count = sum(1 for event in events if event["state"] in ["distracted", "away"])
-    multiple_faces_count = sum(1 for event in events if event["num_faces"] > 1)
-    no_face_count = sum(1 for event in events if event["num_faces"] == 0)
-    device_detected_count = sum(1 for event in events if event["device"]["device_detected"])
-
-    results = {
-        "average_attention_score": sum(attention_scores) / len(attention_scores) if attention_scores else 0,
-        "distracted_count": distracted_count,
-        "multiple_faces_count": multiple_faces_count,
-        "no_face_count": no_face_count,
-        "device_detected_count": device_detected_count,
-    }
-
-    sessions[session_id]["students"][roll_no]["status"] = "Finished"
-    sessions[session_id]["students"][roll_no]["results"] = results
-
+    # --- AI Proctoring Logic ---
+    # This is where you would integrate your Gemini face/gaze detection logic
+    # For this prototype, we'll simulate the analysis
+    import random
+    face_count = random.choice([1, 1, 1, 1, 0, 2]) # Simulate face count
+    status = "Focused"
+    if face_count == 0:
+        status = "No face detected"
+    elif face_count > 1:
+        status = "Multiple faces detected"
+    
+    sessions[session_id]["status"] = status
     await send_status_update()
-
-    return {"status": "success", "results": results}
+    return {"status": "success", "proctoring_status": status}
 
 @app.get("/api/admin-status")
 async def admin_status():
@@ -192,7 +105,7 @@ async def admin_status():
 
 @app.get("/api/session/{session_id}")
 async def get_session(session_id: str):
-    """Gets session details."""
+    """Student gets session details (e.g., Google Form link)."""
     if session_id in sessions:
         return {"status": "success", "data": sessions[session_id]}
     return {"status": "error", "message": "Session not found"}
