@@ -1,10 +1,14 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 
-interface Session {
-  student_id: string;
+interface StudentData {
   status: string;
+  results?: any;
+}
+
+interface Session {
   google_form_link: string;
+  students: Record<string, StudentData>;
 }
 
 export default function AdminDashboard() {
@@ -18,7 +22,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     const fetchAdminStatus = async () => {
       try {
-        const response = await axios.get("http://localhost:8000/api/admin-status");
+        const response = await axios.get("http://127.0.0.1:8000/api/admin-status");
         setSessions(response.data);
       } catch (error) {
         console.error("Error fetching admin status:", error);
@@ -27,7 +31,7 @@ export default function AdminDashboard() {
 
     fetchAdminStatus();
 
-    const ws = new WebSocket("ws://localhost:8000/ws/admin");
+    const ws = new WebSocket("ws://127.0.0.1:8000/ws/admin");
 
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
@@ -48,9 +52,9 @@ export default function AdminDashboard() {
     setIsCreating(true);
 
     try {
-      const response = await axios.post("http://localhost:8000/api/start-session", {
+      const response = await axios.post("http://127.0.0.1:8000/api/start-session", {
         google_form_link: newTestLink,
-        student_id: newStudentId,
+        students: newStudentId ? [newStudentId] : [],
       });
       if (response.data.status === 'success') {
         const studentLink = `${window.location.origin}/student/${response.data.session_id}`;
@@ -76,6 +80,7 @@ export default function AdminDashboard() {
       'Multiple faces detected': 'status-danger',
       'Device Detected': 'status-danger',
       'Not Started': 'status-neutral',
+      'Finished': 'status-success',
     };
     
     return statusClasses[status as keyof typeof statusClasses] || 'status-neutral';
@@ -84,6 +89,7 @@ export default function AdminDashboard() {
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
   };
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
@@ -239,45 +245,71 @@ export default function AdminDashboard() {
                   className="p-6 bg-gradient-to-r from-white to-secondary-50 border border-secondary-200 rounded-xl hover:shadow-medium transition-all duration-200 animate-slide-up"
                   style={{ animationDelay: `${index * 0.1}s` }}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-4 mb-3">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-sm font-medium text-secondary-600">Session ID:</span>
-                          <span className="font-mono text-sm bg-secondary-100 px-2 py-1 rounded text-secondary-800">
-                            {sessionId.slice(0, 8)}...
-                          </span>
+                  {Object.entries(sessionData.students).map(([rollNo, studentData]) => (
+                    <div key={rollNo}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-4 mb-3">
+                            <div className="flex items-center space-x-2">
+                              <span className="text-sm font-medium text-secondary-600">Session ID:</span>
+                              <span className="font-mono text-sm bg-primary-100 px-2 py-1 rounded text-primary-800 font-bold">
+                                {sessionId.slice(0, 8)}...
+                              </span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <span className="text-sm font-medium text-secondary-600">Student:</span>
+                              <span className="font-mono text-sm bg-success-100 px-2 py-1 rounded text-success-800 font-bold">
+                                {rollNo}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <span className="text-sm text-secondary-600">Form:</span>
+                            <a 
+                              href={sessionData.google_form_link} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-sm text-primary-600 hover:text-primary-700 hover:underline truncate max-w-md"
+                            >
+                              {sessionData.google_form_link}
+                            </a>
+                          </div>
                         </div>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-sm font-medium text-secondary-600">Student:</span>
-                          <span className="text-sm text-secondary-800">
-                            {sessionData.student_id || 'Not Joined'}
+                        <div className="flex items-center space-x-3">
+                          <span className={`status-badge ${getStatusBadge(studentData.status)}`}>
+                            {studentData.status}
                           </span>
                         </div>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <span className="text-sm text-secondary-600">Form:</span>
-                        <a 
-                          href={sessionData.google_form_link} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-sm text-primary-600 hover:text-primary-700 hover:underline truncate max-w-md"
-                        >
-                          {sessionData.google_form_link}
-                        </a>
-                      </div>
+                      {studentData.results && (
+                        <div className="mt-4 pt-4 border-t border-secondary-200">
+                          <h4 className="text-md font-semibold text-secondary-800 mb-2">Results</h4>
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div className="bg-secondary-100 p-3 rounded-lg">
+                              <p className="font-medium text-secondary-600">Avg. Attention</p>
+                              <p className="font-bold text-lg text-primary-600">{studentData.results.average_attention_score.toFixed(2)}%</p>
+                            </div>
+                            <div className="bg-secondary-100 p-3 rounded-lg">
+                              <p className="font-medium text-secondary-600">Distractions</p>
+                              <p className="font-bold text-lg text-danger-600">{studentData.results.distracted_count}</p>
+                            </div>
+                            <div className="bg-secondary-100 p-3 rounded-lg">
+                              <p className="font-medium text-secondary-600">Multiple Faces</p>
+                              <p className="font-bold text-lg text-danger-600">{studentData.results.multiple_faces_count}</p>
+                            </div>
+                            <div className="bg-secondary-100 p-3 rounded-lg">
+                              <p className="font-medium text-secondary-600">No Face</p>
+                              <p className="font-bold text-lg text-danger-600">{studentData.results.no_face_count}</p>
+                            </div>
+                            <div className="bg-secondary-100 p-3 rounded-lg">
+                              <p className="font-medium text-secondary-600">Device Detected</p>
+                              <p className="font-bold text-lg text-danger-600">{studentData.results.device_detected_count}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center space-x-3">
-                      <span className={`status-badge ${getStatusBadge(sessionData.status)}`}>
-                        {sessionData.status}
-                      </span>
-                      <button className="p-2 text-secondary-400 hover:text-secondary-600 transition-colors">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
+                  ))}
                 </div>
               ))}
             </div>

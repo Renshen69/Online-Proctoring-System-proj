@@ -75,16 +75,6 @@ const Admin: React.FC = () => {
     }
   };
 
-  const handleStopSession = async (sessionId: string, rollNo: string) => {
-    try {
-      await axios.post('http://127.0.0.1:8000/api/stop-session', { 
-        session_id: sessionId, 
-        roll_no: rollNo 
-      });
-    } catch (err) {
-      console.error('Failed to stop session', err);
-    }
-  };
 
   const getStatusBadge = (status: string) => {
     const statusClasses = {
@@ -291,14 +281,6 @@ const Admin: React.FC = () => {
                           <span className={`status-badge ${getStatusBadge(studentData.status)}`}>
                             {studentData.status}
                           </span>
-                          {studentData.status !== 'Finished' && (
-                            <button 
-                              onClick={() => handleStopSession(sessionId, rollNo)}
-                              className="btn-danger"
-                            >
-                              Stop
-                            </button>
-                          )}
                         </div>
                       </div>
                       {studentData.results && (

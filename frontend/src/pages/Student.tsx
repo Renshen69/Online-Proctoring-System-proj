@@ -10,6 +10,9 @@ const Student: React.FC = () => {
   const [proctoringStatus, setProctoringStatus] = useState('Connecting...');
   const [isConnected, setIsConnected] = useState(false);
   const [timeElapsed, setTimeElapsed] = useState(0);
+  const [isTestEnded, setIsTestEnded] = useState(false);
+  const [testResults, setTestResults] = useState<any>(null);
+  const [isEndingTest, setIsEndingTest] = useState(false);
   const webcamRef = useRef<Webcam>(null);
 
   useEffect(() => {
@@ -34,7 +37,7 @@ const Student: React.FC = () => {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      if (webcamRef.current && isConnected) {
+      if (webcamRef.current && isConnected && !isTestEnded) {
         const imageSrc = webcamRef.current.getScreenshot();
         if (imageSrc) {
           // Remove the "data:image/jpeg;base64," prefix
@@ -55,18 +58,18 @@ const Student: React.FC = () => {
     }, 1000); // Send a frame every second
 
     return () => clearInterval(interval);
-  }, [sessionId, rollNo, isConnected]);
+  }, [sessionId, rollNo, isConnected, isTestEnded]);
 
   // Timer effect
   useEffect(() => {
-    if (!isConnected) return;
+    if (!isConnected || isTestEnded) return;
     
     const timer = setInterval(() => {
       setTimeElapsed(prev => prev + 1);
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isConnected]);
+  }, [isConnected, isTestEnded]);
 
   const formatTime = (seconds: number) => {
     const hrs = Math.floor(seconds / 3600);
@@ -81,6 +84,32 @@ const Student: React.FC = () => {
     if (status === 'Distracted') return 'status-distracted';
     return 'status-neutral';
   };
+
+  const handleEndTest = async () => {
+    if (!sessionId || !rollNo) return;
+    
+    setIsEndingTest(true);
+    try {
+      const response = await axios.post('http://127.0.0.1:8000/api/stop-session', {
+        session_id: sessionId,
+        roll_no: rollNo
+      });
+      
+      if (response.data.status === 'success') {
+        setTestResults(response.data.results);
+        setIsTestEnded(true);
+        setProctoringStatus('Test Completed');
+      } else {
+        setError(response.data.message || 'Failed to end test');
+      }
+    } catch (err) {
+      console.error('Error ending test:', err);
+      setError('Failed to end test. Please try again.');
+    } finally {
+      setIsEndingTest(false);
+    }
+  };
+
 
   if (error) {
     return (
@@ -205,52 +234,125 @@ const Student: React.FC = () => {
             <div>
               <h3 className="text-sm font-medium text-secondary-700 mb-3">Camera Feed</h3>
               <div className="relative aspect-video bg-secondary-900 rounded-xl overflow-hidden shadow-medium">
-                <Webcam
-                  audio={false}
-                  ref={webcamRef}
-                  screenshotFormat="image/jpeg"
-                  className="absolute inset-0 w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
-                <div className="absolute top-3 right-3">
-                  <div className="w-3 h-3 bg-danger-500 rounded-full animate-pulse"></div>
-                </div>
+                {!isTestEnded ? (
+                  <>
+                    <Webcam
+                      audio={false}
+                      ref={webcamRef}
+                      screenshotFormat="image/jpeg"
+                      className="absolute inset-0 w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+                    <div className="absolute top-3 right-3">
+                      <div className="w-3 h-3 bg-danger-500 rounded-full animate-pulse"></div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center bg-secondary-100">
+                    <div className="text-center">
+                      <div className="w-12 h-12 bg-success-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <svg className="w-6 h-6 text-success-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                      <p className="text-sm text-secondary-600">Monitoring Stopped</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Instructions */}
-            <div className="space-y-3">
-              <div className="flex items-start space-x-3 p-3 bg-warning-50 border border-warning-200 rounded-lg">
-                <svg className="w-5 h-5 text-warning-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <div>
-                  <p className="text-sm font-medium text-warning-800">Important</p>
-                  <p className="text-xs text-warning-700">Keep your face visible and avoid looking away from the screen.</p>
+            {!isTestEnded && (
+              <div className="space-y-3">
+                <div className="flex items-start space-x-3 p-3 bg-warning-50 border border-warning-200 rounded-lg">
+                  <svg className="w-5 h-5 text-warning-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div>
+                    <p className="text-sm font-medium text-warning-800">Important</p>
+                    <p className="text-xs text-warning-700">Keep your face visible and avoid looking away from the screen.</p>
+                  </div>
                 </div>
-              </div>
 
-              <div className="flex items-start space-x-3 p-3 bg-info-50 border border-info-200 rounded-lg">
-                <svg className="w-5 h-5 text-info-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <div>
-                  <p className="text-sm font-medium text-info-800">Privacy</p>
-                  <p className="text-xs text-info-700">Your video is only used for proctoring and is not recorded.</p>
+                <div className="flex items-start space-x-3 p-3 bg-info-50 border border-info-200 rounded-lg">
+                  <svg className="w-5 h-5 text-info-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div>
+                    <p className="text-sm font-medium text-info-800">Privacy</p>
+                    <p className="text-xs text-info-700">Your video is only used for proctoring and is not recorded.</p>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
 
         {/* Footer Actions */}
         <div className="p-6 border-t border-secondary-200">
-          <button className="w-full btn-danger">
-            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-            End Test
-          </button>
+          {!isTestEnded ? (
+            <div className="space-y-4">
+              <div className="text-center text-sm text-secondary-600">
+                <p>Test session is being monitored</p>
+                <p className="text-xs mt-1">Click "End Test" when you're finished</p>
+              </div>
+              <button
+                onClick={handleEndTest}
+                disabled={isEndingTest}
+                className="w-full btn-danger disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isEndingTest ? (
+                  <div className="flex items-center justify-center">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    Ending Test...
+                  </div>
+                ) : (
+                  'End Test'
+                )}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="text-center">
+                <div className="w-12 h-12 bg-success-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <svg className="w-6 h-6 text-success-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-success-800 mb-2">Test Completed!</h3>
+                <p className="text-sm text-secondary-600">Your test session has ended successfully.</p>
+              </div>
+              
+              {testResults && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-secondary-700 text-center">Your Results</h4>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="bg-secondary-100 p-2 rounded-lg text-center">
+                      <p className="font-medium text-secondary-600">Attention</p>
+                      <p className="font-bold text-primary-600">{testResults.average_attention_score.toFixed(1)}%</p>
+                    </div>
+                    <div className="bg-secondary-100 p-2 rounded-lg text-center">
+                      <p className="font-medium text-secondary-600">Distractions</p>
+                      <p className="font-bold text-danger-600">{testResults.distracted_count}</p>
+                    </div>
+                    <div className="bg-secondary-100 p-2 rounded-lg text-center">
+                      <p className="font-medium text-secondary-600">Multiple Faces</p>
+                      <p className="font-bold text-danger-600">{testResults.multiple_faces_count}</p>
+                    </div>
+                    <div className="bg-secondary-100 p-2 rounded-lg text-center">
+                      <p className="font-medium text-secondary-600">No Face</p>
+                      <p className="font-bold text-danger-600">{testResults.no_face_count}</p>
+                    </div>
+                    <div className="bg-secondary-100 p-2 rounded-lg text-center">
+                      <p className="font-medium text-secondary-600">Device Detected</p>
+                      <p className="font-bold text-danger-600">{testResults.device_detected_count}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

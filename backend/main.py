@@ -151,39 +151,53 @@ async def submit_frame(data: dict):
 
 @app.post("/api/stop-session")
 async def stop_session(data: dict):
-    session_id = data.get("session_id")
-    roll_no = data.get("roll_no")
+    try:
+        session_id = data.get("session_id")
+        roll_no = data.get("roll_no")
 
-    if session_id not in sessions or roll_no not in sessions[session_id]["students"]:
-        return {"status": "error", "message": "Invalid session ID or roll number"}
+        if not session_id or not roll_no:
+            return {"status": "error", "message": "Session ID and roll number are required"}
 
-    student_data = sessions[session_id]["students"][roll_no]
-    events = student_data.get("events", [])
+        if session_id not in sessions or roll_no not in sessions[session_id]["students"]:
+            return {"status": "error", "message": "Invalid session ID or roll number"}
 
-    if not events:
-        return {"status": "error", "message": "No events found for this student."}
+        student_data = sessions[session_id]["students"][roll_no]
+        events = student_data.get("events", [])
 
-    # Calculate results
-    attention_scores = [event["attention_score"] for event in events]
-    distracted_count = sum(1 for event in events if event["state"] in ["distracted", "away"])
-    multiple_faces_count = sum(1 for event in events if event["num_faces"] > 1)
-    no_face_count = sum(1 for event in events if event["num_faces"] == 0)
-    device_detected_count = sum(1 for event in events if event["device"]["device_detected"])
+        # Calculate results (handle case where no events exist)
+        if not events:
+            results = {
+                "average_attention_score": 0,
+                "distracted_count": 0,
+                "multiple_faces_count": 0,
+                "no_face_count": 0,
+                "device_detected_count": 0,
+            }
+        else:
+            attention_scores = [event.get("attention_score", 0) for event in events]
+            distracted_count = sum(1 for event in events if event.get("state", "") in ["distracted", "away"])
+            multiple_faces_count = sum(1 for event in events if event.get("num_faces", 0) > 1)
+            no_face_count = sum(1 for event in events if event.get("num_faces", 0) == 0)
+            device_detected_count = sum(1 for event in events if event.get("device", {}).get("phone_detected", False))
 
-    results = {
-        "average_attention_score": sum(attention_scores) / len(attention_scores) if attention_scores else 0,
-        "distracted_count": distracted_count,
-        "multiple_faces_count": multiple_faces_count,
-        "no_face_count": no_face_count,
-        "device_detected_count": device_detected_count,
-    }
+            results = {
+                "average_attention_score": sum(attention_scores) / len(attention_scores) if attention_scores else 0,
+                "distracted_count": distracted_count,
+                "multiple_faces_count": multiple_faces_count,
+                "no_face_count": no_face_count,
+                "device_detected_count": device_detected_count,
+            }
 
-    sessions[session_id]["students"][roll_no]["status"] = "Finished"
-    sessions[session_id]["students"][roll_no]["results"] = results
+        sessions[session_id]["students"][roll_no]["status"] = "Finished"
+        sessions[session_id]["students"][roll_no]["results"] = results
 
-    await send_status_update()
+        await send_status_update()
 
-    return {"status": "success", "results": results}
+        return {"status": "success", "results": results}
+    
+    except Exception as e:
+        print(f"Error in /stop-session: {e}")
+        return {"status": "error", "message": str(e)}
 
 @app.get("/api/admin-status")
 async def admin_status():
